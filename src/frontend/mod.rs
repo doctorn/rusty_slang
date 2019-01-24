@@ -1,13 +1,38 @@
-mod ast;
-mod lexer;
-mod parser;
-mod past;
+use std::fmt;
 
+mod ast;
+mod lex;
+mod parse;
+mod past;
+mod types;
+
+#[derive(Clone)]
 pub struct Location {
-    file: &'static str,
+    filename: String,
     line: usize,
     column: usize,
-    text: String,
+}
+
+impl Location {
+    pub fn new(filename: String, line: usize, column: usize) -> Location {
+        Location {
+            filename,
+            line,
+            column,
+        }
+    }
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}: line {}: column {}: ",
+            self.filename,
+            self.line + 1,
+            self.column
+        )
+    }
 }
 
 pub struct Locatable<T> {
@@ -15,26 +40,41 @@ pub struct Locatable<T> {
     t: T,
 }
 
-impl<T> Locatable<T> {
-    pub fn into_raw(self) -> T {
+impl<T> From<(Location, T)> for Locatable<T> {
+    fn from((location, t): (Location, T)) -> Locatable<T> {
+        Locatable { location, t }
+    }
+}
+
+impl<'a, T> Locatable<T> {
+    fn into_raw(self) -> T {
         self.t
     }
 
     fn borrow_raw(&self) -> &T {
         &self.t
     }
+
+    pub fn location(&self) -> &Location {
+        &self.location
+    }
 }
 
-impl<T> Into<Location> for Locatable<T> {
+impl<'a, T> Into<Location> for Locatable<T> {
     fn into(self) -> Location {
         self.location
     }
 }
 
-fn check(expr: &past::Expr) -> Result<(), String> {
+fn check(_: &past::Expr) -> Result<(), String> {
     unimplemented!()
 }
 
-pub fn frontend(filename: String) -> ast::Expr {
-    unimplemented!()
+pub fn frontend(filename: String, text: String) -> Result<ast::Expr, String> {
+    let lexer = self::lex::Lexer::over(filename, text.chars());
+    let mut parser = parse::Parser::new(lexer);
+    let past = parser.parse()?;
+    println!("{}", past);
+    check(&past)?;
+    Ok(past.into())
 }

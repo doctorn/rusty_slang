@@ -1,34 +1,7 @@
+use super::types::TypeExpr;
 use super::Locatable;
 
 use std::fmt;
-
-pub enum TypeExpr {
-    Unit,
-    Bool,
-    Int,
-    Ref(Box<TypeExpr>),
-    Arrow(Box<TypeExpr>, Box<TypeExpr>),
-    Product(Box<TypeExpr>, Box<TypeExpr>),
-    Union(Box<TypeExpr>, Box<TypeExpr>),
-}
-
-impl fmt::Display for TypeExpr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::TypeExpr::*;
-        match *self {
-            Unit => write!(f, "unit"),
-            Bool => write!(f, "bool"),
-            Int => write!(f, "int"),
-            Ref(ref sub) => write!(f, "{} ref", sub),
-            Arrow(ref left, ref right) => match **left {
-                Arrow(_, _) => write!(f, "({}) -> {}", left, right),
-                _ => write!(f, "{} -> {}", left, right),
-            },
-            Product(ref left, ref right) => write!(f, "{} * {}", left, right),
-            Union(ref left, ref right) => write!(f, "{} | {}", left, right),
-        }
-    }
-}
 
 pub enum BinOp {
     Add,
@@ -130,22 +103,22 @@ impl fmt::Display for Expr {
             Int(ref i) => write!(f, "{}", i),
             Bool(ref b) => write!(f, "{}", b),
             UnOp(ref op, ref sub) => write!(f, "{}{}", op, sub),
-            BinOp(ref left, ref op, ref right) => write!(f, "{} {} {}", left, op, right),
+            BinOp(ref op, ref left, ref right) => write!(f, "{} {} {}", left, op, right),
             If(ref condition, ref left, ref right) => {
-                write!(f, "if {} then {} else {}", condition, left, right)
+                write!(f, "if {} then {} else {} end", condition, left, right)
             }
             Pair(ref left, ref right) => write!(f, "({}, {})", left, right),
             Fst(ref sub) => write!(f, "fst {}", sub),
             Snd(ref sub) => write!(f, "snd {}", sub),
-            Inl(ref sub, ref type_expr) => write!(f, "inl {}: {}", sub, type_expr),
-            Inr(ref sub, ref type_expr) => write!(f, "inr {}: {}", sub, type_expr),
+            Inl(ref sub, ref type_expr) => write!(f, "inl {} {}", type_expr, sub),
+            Inr(ref sub, ref type_expr) => write!(f, "inr {} {}", type_expr, sub),
             Case(
                 ref sub,
                 (ref v_left, ref type_expr_left, ref sub_left),
                 (ref v_right, ref type_expr_right, ref sub_right),
             ) => write!(
                 f,
-                "case {} inl({}: {}) -> {} | inr({}: {}) -> {}",
+                "case {} of inl({}: {}) -> {} | inr({}: {}) -> {}",
                 sub, v_left, type_expr_left, sub_left, v_right, type_expr_right, sub_right
             ),
             Lambda((ref v, ref type_expr, ref sub)) => {
@@ -153,6 +126,7 @@ impl fmt::Display for Expr {
             }
             While(ref condition, ref sub) => write!(f, "while {} do {} end", condition, sub),
             Seq(ref seq) => {
+                write!(f, "begin ")?;
                 let mut first = true;
                 for sub in seq.iter() {
                     if first {
@@ -162,7 +136,7 @@ impl fmt::Display for Expr {
                         write!(f, "; {}", sub)?;
                     }
                 }
-                Ok(())
+                write!(f, " end")
             }
             Ref(ref sub) => write!(f, "ref {}", sub),
             Deref(ref sub) => write!(f, "!{}", sub),

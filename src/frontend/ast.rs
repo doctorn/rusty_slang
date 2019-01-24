@@ -46,7 +46,7 @@ impl From<past::UnOp> for UnOp {
 
 type Var = String;
 
-type Lambda = (Var, Box<Expr>);
+pub type Lambda = (Var, Box<Expr>);
 
 pub enum Expr {
     Unit,
@@ -73,13 +73,13 @@ pub enum Expr {
     LetRecFun(Var, Lambda, Box<Expr>),
 }
 
-impl From<past::SubExpr> for Box<Expr> {
+impl<'a> From<past::SubExpr> for Box<Expr> {
     fn from(sub: past::SubExpr) -> Box<Expr> {
         Box::new(Expr::from(sub.into_raw()))
     }
 }
 
-impl From<past::Expr> for Expr {
+impl<'a> From<past::Expr> for Expr {
     fn from(past: past::Expr) -> Expr {
         use self::Expr::*;
         match past {
