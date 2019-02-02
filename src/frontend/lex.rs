@@ -209,7 +209,7 @@ where
                 ',' => Comma,
                 ':' => {
                     self.advance();
-                    if let Some(':') = self.chars.peek() {
+                    if let Some('=') = self.chars.peek() {
                         Assign
                     } else {
                         return Ok(Colon);

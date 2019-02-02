@@ -12,8 +12,6 @@ pub enum BinOp {
     And,
     Or,
     Eq,
-    Eqb,
-    Eqi,
 }
 
 impl fmt::Display for BinOp {
@@ -26,10 +24,8 @@ impl fmt::Display for BinOp {
             Sub => write!(f, "-"),
             Lt => write!(f, "<"),
             And => write!(f, "&&"),
-            Or => write!(f, "+"),
+            Or => write!(f, "||"),
             Eq => write!(f, "="),
-            Eqb => write!(f, "eqi"),
-            Eqi => write!(f, "eqb"),
         }
     }
 }
@@ -49,9 +45,9 @@ impl fmt::Display for UnOp {
     }
 }
 
-type Var = String;
+pub type Var = String;
 
-type Lambda = (Var, TypeExpr, SubExpr);
+pub type Lambda = (Var, TypeExpr, SubExpr);
 
 pub type SubExpr = Box<Locatable<Expr>>;
 
@@ -90,7 +86,6 @@ pub enum Expr {
     App(SubExpr, SubExpr),
     Let(Var, TypeExpr, SubExpr, SubExpr),
     LetFun(Var, Lambda, TypeExpr, SubExpr),
-    LetRecFun(Var, Lambda, TypeExpr, SubExpr),
 }
 
 impl fmt::Display for Expr {
@@ -146,12 +141,6 @@ impl fmt::Display for Expr {
                 write!(f, "let {}: {} = {} in {} end", v, type_expr, sub, body)
             }
             LetFun(
-                ref v,
-                (ref v_lambda, ref type_expr_lambda, ref sub_lambda),
-                ref type_expr,
-                ref body,
-            )
-            | LetRecFun(
                 ref v,
                 (ref v_lambda, ref type_expr_lambda, ref sub_lambda),
                 ref type_expr,

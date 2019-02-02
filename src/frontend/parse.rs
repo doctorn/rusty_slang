@@ -73,7 +73,8 @@ where
         } else {
             return Err("Expected type expression".to_string());
         };
-        if self.next_is(Kind::Ref) {
+        while self.next_is(Kind::Ref) {
+            self.eat(Kind::Ref)?;
             type_expr = TypeExpr::Ref(Box::new(type_expr));
         }
         Ok(type_expr)
@@ -128,8 +129,10 @@ where
                 unreachable!()
             }
         } else if self.next_is(Kind::True) {
+            self.eat(Kind::True)?;
             Expr::Bool(true)
         } else if self.next_is(Kind::False) {
+            self.eat(Kind::False)?;
             Expr::Bool(false)
         } else if self.next_is(Kind::LParen) {
             self.eat(Kind::LParen)?;
@@ -151,6 +154,9 @@ where
         } else if self.next_is(Kind::Not) {
             self.eat(Kind::Not)?;
             Expr::UnOp(UnOp::Not, Box::new(self.next_factor()?))
+        } else if self.next_is(Kind::Sub) {
+            self.eat(Kind::Sub)?;
+            Expr::UnOp(UnOp::Neg, Box::new(self.next_factor()?))
         } else {
             return Err("Expected an expression".to_string());
         };
@@ -277,6 +283,7 @@ where
             self.eat(Kind::Begin)?;
             let mut exprs = vec![Box::new(self.next_expression()?)];
             while self.next_is(Kind::Semi) {
+                self.eat(Kind::Semi)?;
                 exprs.push(Box::new(self.next_expression()?));
             }
             self.eat(Kind::End)?;
@@ -400,7 +407,7 @@ where
                         unreachable!();
                     }
                 } else {
-                    return Err("Expected type annotation".to_string()); // TOOD proper error
+                    return Err("Expected type annotation".to_string()); // TODO proper error
                 }
             } else {
                 unreachable!()

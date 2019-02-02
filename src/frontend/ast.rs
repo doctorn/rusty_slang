@@ -1,4 +1,9 @@
 use super::past;
+use std::collections::HashSet;
+
+trait Free {
+    fn fv(&self) -> HashSet<String>;
+}
 
 pub enum BinOp {
     Add,
@@ -8,8 +13,7 @@ pub enum BinOp {
     Lt,
     And,
     Or,
-    Eqb,
-    Eqi,
+    Eq,
 }
 
 impl From<past::BinOp> for BinOp {
@@ -22,9 +26,7 @@ impl From<past::BinOp> for BinOp {
             past::BinOp::Lt => BinOp::Lt,
             past::BinOp::And => BinOp::And,
             past::BinOp::Or => BinOp::Or,
-            past::BinOp::Eqb => BinOp::Eqb,
-            past::BinOp::Eqi => BinOp::Eqi,
-            _ => unreachable!(),
+            past::BinOp::Eq => BinOp::Eq,
         }
     }
 }
@@ -70,7 +72,6 @@ pub enum Expr {
     Lambda(Lambda),
     App(Box<Expr>, Box<Expr>),
     LetFun(Var, Lambda, Box<Expr>),
-    LetRecFun(Var, Lambda, Box<Expr>),
 }
 
 impl<'a> From<past::SubExpr> for Box<Expr> {
@@ -115,9 +116,6 @@ impl<'a> From<past::Expr> for Expr {
             past::Expr::App(left, right) => App(left.into(), right.into()),
             past::Expr::Let(v, _, sub, body) => App(Box::new(Lambda((v, body.into()))), sub.into()),
             past::Expr::LetFun(f, (v, _, sub), _, body) => LetFun(f, (v, sub.into()), body.into()),
-            past::Expr::LetRecFun(f, (v, _, sub), _, body) => {
-                LetRecFun(f, (v, sub.into()), body.into())
-            }
         }
     }
 }

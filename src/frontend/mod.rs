@@ -1,6 +1,6 @@
 use std::fmt;
 
-mod ast;
+pub mod ast;
 mod lex;
 mod parse;
 mod past;
@@ -66,8 +66,9 @@ impl<'a, T> Into<Location> for Locatable<T> {
     }
 }
 
-fn check(_: &past::Expr) -> Result<(), String> {
-    unimplemented!()
+fn check(expr: &past::Expr) -> Result<(), String> {
+    println!("{}", types::infer(&mut vec![], &expr)?);
+    Ok(())
 }
 
 pub fn frontend(filename: String, text: String) -> Result<ast::Expr, String> {
