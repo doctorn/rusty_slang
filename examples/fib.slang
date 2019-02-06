@@ -1,4 +1,4 @@
-let fib( m : int) : int = 
+let fib(m : int) : int = 
     if m = 0
     then 1 
     else if m = 1 

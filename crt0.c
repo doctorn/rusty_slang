@@ -1,5 +1,6 @@
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 union slang_value;
@@ -30,6 +31,8 @@ typedef union slang_value {
   slang_ptr ref;
   slang_lambda lambda;
 } slang_value;
+
+slang_ptr entry();
 
 slang_ptr alloc() {
   slang_ptr built = {.value = malloc(sizeof(slang_value))};
@@ -105,10 +108,11 @@ slang_ptr apply(slang_ptr closure, slang_ptr arg) {
   return lambda.f(arg, lambda.env);
 }
 
-slang_ptr check_case(slang_ptr in, slang_ptr lambda_left,
-                     slang_ptr lambda_right) {
-  if (in.value->in.position == 0)
-    return apply(lambda_left, in.value->in.value);
-  else
-    return apply(lambda_right, in.value->in.value);
+uint64_t check_case(slang_ptr in) { return in.value->in.position; }
+
+slang_ptr case_inner(slang_ptr in) { return in.value->in.value; }
+
+int main() {
+  printf("%d\n", entry());
+  return 0;
 }

@@ -17,13 +17,10 @@ pub fn compile(input: String, output: String) {
         .read_to_string(&mut text)
         .expect("Failed to read file"); // TODO proper error
     match frontend::frontend(input, text) {
-        Ok(ast) => {
-            let x86 = backend::x86::to_x86(ast.into());
-            for line in x86.iter() {
-                println!("{}", line);
-                output_file.write(format!("{}\n", line).as_bytes()).unwrap(); // TODO proper error
-            }
-        }
+        Ok(ast) => match backend::gen::generate(&mut output_file, ast.into()) {
+            Err(err) => println!("{}", err),
+            _ => (),
+        },
         Err(err) => println!("{}", err),
     }
 }

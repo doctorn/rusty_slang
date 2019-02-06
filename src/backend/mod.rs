@@ -1,5 +1,7 @@
 use super::frontend::ast;
+pub use ast::{BinOp, UnOp};
 
+pub mod gen;
 pub mod x86;
 
 pub enum Expr {
@@ -72,6 +74,3 @@ impl From<ast::Expr> for Expr {
         }
     }
 }
-/*
-    LetFun(Var, Lambda, Box<Expr>),
-*/

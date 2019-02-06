@@ -117,7 +117,7 @@ impl fmt::Display for Expr {
                 sub, v_left, type_expr_left, sub_left, v_right, type_expr_right, sub_right
             ),
             Lambda((ref v, ref type_expr, ref sub)) => {
-                write!(f, "fun {}: {} -> {}", v, type_expr, sub)
+                write!(f, "fun {}: {} -> {} end", v, type_expr, sub)
             }
             While(ref condition, ref sub) => write!(f, "while {} do {} end", condition, sub),
             Seq(ref seq) => {
