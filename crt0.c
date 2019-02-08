@@ -35,44 +35,8 @@ typedef union slang_value {
 slang_ptr entry();
 
 slang_ptr alloc() {
-  slang_ptr built = {.value = malloc(sizeof(slang_value))};
-  return built;
+  return (slang_ptr)(slang_value *)malloc(sizeof(slang_value));
 }
-
-slang_ptr make_inl(slang_ptr inner) {
-  slang_union inl = {.position = 0, .value = inner};
-  slang_ptr built = alloc();
-  built.value->in = inl;
-  return built;
-}
-
-slang_ptr make_inr(slang_ptr inner) {
-  slang_union inr = {.position = 1, .value = inner};
-  slang_ptr built = alloc();
-  built.value->in = inr;
-  return built;
-}
-
-slang_ptr make_pair(slang_ptr left, slang_ptr right) {
-  slang_pair pair = {.left = left, .right = right};
-  slang_ptr built = alloc();
-  built.value->pair = pair;
-  return built;
-}
-
-slang_ptr fst(slang_ptr pair) { return pair.value->pair.left; }
-
-slang_ptr snd(slang_ptr pair) { return pair.value->pair.right; }
-
-slang_ptr make_ref(slang_ptr inner) {
-  slang_ptr built = alloc();
-  built.value->ref = inner;
-  return built;
-}
-
-slang_ptr deref(slang_ptr ref) { return ref.value->ref; }
-
-void assign(slang_ptr ref, slang_ptr value) { ref.value->ref = value; }
 
 slang_ptr make_closure(slang_ptr (*f)(slang_ptr, slang_ptr *), size_t envc,
                        ...) {
@@ -102,15 +66,6 @@ slang_ptr make_recursive_closure(slang_ptr (*f)(slang_ptr, slang_ptr *),
   va_end(args);
   return built;
 }
-
-slang_ptr apply(slang_ptr closure, slang_ptr arg) {
-  slang_lambda lambda = closure.value->lambda;
-  return lambda.f(arg, lambda.env);
-}
-
-uint64_t check_case(slang_ptr in) { return in.value->in.position; }
-
-slang_ptr case_inner(slang_ptr in) { return in.value->in.value; }
 
 int main() {
   printf("%d\n", entry());

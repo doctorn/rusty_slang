@@ -1,7 +1,8 @@
 use std::iter::Peekable;
 
+use super::ast::{BinOp, UnOp};
 use super::lex::{Kind, Token};
-use super::past::{BinOp, Expr, UnOp};
+use super::past::Expr;
 use super::types::TypeExpr;
 use super::{Locatable, Location};
 

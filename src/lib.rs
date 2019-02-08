@@ -17,7 +17,7 @@ pub fn compile(input: String, output: String) {
         .read_to_string(&mut text)
         .expect("Failed to read file"); // TODO proper error
     match frontend::frontend(input, text) {
-        Ok(ast) => match backend::gen::generate(&mut output_file, ast.into()) {
+        Ok(ast) => match backend::generate(&mut output_file, ast.into()) {
             Err(err) => println!("{}", err),
             _ => (),
         },

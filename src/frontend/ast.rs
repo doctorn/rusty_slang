@@ -1,9 +1,5 @@
 use super::past;
-use std::collections::HashSet;
-
-trait Free {
-    fn fv(&self) -> HashSet<String>;
-}
+use std::fmt;
 
 pub enum BinOp {
     Add,
@@ -16,17 +12,18 @@ pub enum BinOp {
     Eq,
 }
 
-impl From<past::BinOp> for BinOp {
-    fn from(op: past::BinOp) -> BinOp {
-        match op {
-            past::BinOp::Add => BinOp::Add,
-            past::BinOp::Mul => BinOp::Mul,
-            past::BinOp::Div => BinOp::Div,
-            past::BinOp::Sub => BinOp::Sub,
-            past::BinOp::Lt => BinOp::Lt,
-            past::BinOp::And => BinOp::And,
-            past::BinOp::Or => BinOp::Or,
-            past::BinOp::Eq => BinOp::Eq,
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::BinOp::*;
+        match *self {
+            Add => write!(f, "+"),
+            Mul => write!(f, "*"),
+            Div => write!(f, "/"),
+            Sub => write!(f, "-"),
+            Lt => write!(f, "<"),
+            And => write!(f, "&&"),
+            Or => write!(f, "||"),
+            Eq => write!(f, "="),
         }
     }
 }
@@ -34,14 +31,14 @@ impl From<past::BinOp> for BinOp {
 pub enum UnOp {
     Neg,
     Not,
-    Read,
 }
 
-impl From<past::UnOp> for UnOp {
-    fn from(op: past::UnOp) -> UnOp {
-        match op {
-            past::UnOp::Neg => UnOp::Neg,
-            past::UnOp::Not => UnOp::Not,
+impl fmt::Display for UnOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::UnOp::*;
+        match *self {
+            Neg => write!(f, "-"),
+            Not => write!(f, "~"),
         }
     }
 }
@@ -52,6 +49,7 @@ pub type Lambda = (Var, Box<Expr>);
 
 pub enum Expr {
     Unit,
+    What,
     Var(Var),
     Int(i64),
     Bool(bool),
@@ -71,6 +69,7 @@ pub enum Expr {
     Assign(Box<Expr>, Box<Expr>),
     Lambda(Lambda),
     App(Box<Expr>, Box<Expr>),
+    Let(Var, Box<Expr>, Box<Expr>),
     LetFun(Var, Lambda, Box<Expr>),
 }
 
@@ -85,7 +84,7 @@ impl<'a> From<past::Expr> for Expr {
         use self::Expr::*;
         match past {
             past::Expr::Unit => Unit,
-            past::Expr::What => UnOp(self::UnOp::Read, Box::new(Unit)),
+            past::Expr::What => What,
             past::Expr::Var(v) => Var(v),
             past::Expr::Bool(b) => Bool(b),
             past::Expr::Int(i) => Int(i),
@@ -114,7 +113,7 @@ impl<'a> From<past::Expr> for Expr {
             past::Expr::Deref(sub) => Deref(sub.into()),
             past::Expr::Assign(left, right) => Assign(left.into(), right.into()),
             past::Expr::App(left, right) => App(left.into(), right.into()),
-            past::Expr::Let(v, _, sub, body) => App(Box::new(Lambda((v, body.into()))), sub.into()),
+            past::Expr::Let(v, _, sub, body) => Let(v, sub.into(), body.into()),
             past::Expr::LetFun(f, (v, _, sub), _, body) => LetFun(f, (v, sub.into()), body.into()),
         }
     }

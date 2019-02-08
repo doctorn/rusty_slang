@@ -1,76 +1,380 @@
-use super::frontend::ast;
-pub use ast::{BinOp, UnOp};
+use super::frontend::ast::{BinOp, Expr, UnOp};
 
-pub mod gen;
-pub mod x86;
+mod x86;
 
-pub enum Expr {
-    Constant(i64),
-    Var(String),
-    UnOp(ast::UnOp, Box<Expr>),
-    BinOp(ast::BinOp, Box<Expr>, Box<Expr>),
-    If(Box<Expr>, Box<Expr>, Box<Expr>),
-    While(Box<Expr>, Box<Expr>),
-    Seq(Vec<Expr>),
-    Pair(Box<Expr>, Box<Expr>),
-    Fst(Box<Expr>),
-    Snd(Box<Expr>),
-    Inl(Box<Expr>),
-    Inr(Box<Expr>),
-    Ref(Box<Expr>),
-    Deref(Box<Expr>),
-    Assign(Box<Expr>, Box<Expr>),
-    Lambda(String, Box<Expr>),
-    App(Box<Expr>, Box<Expr>),
-    Case(Box<Expr>, (String, Box<Expr>), (String, Box<Expr>)),
-    LetFun(String, (String, Box<Expr>), Box<Expr>),
+use x86::*;
+
+use std::fmt;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+
+struct Generator {
+    functions: Vec<GeneratedCode>,
 }
 
-impl From<ast::Expr> for Expr {
-    fn from(expr: ast::Expr) -> Expr {
-        match expr {
-            ast::Expr::Int(i) => Expr::Constant(i),
-            ast::Expr::Bool(true) => Expr::Constant(1),
-            ast::Expr::Bool(false) => Expr::Constant(0),
-            ast::Expr::Unit => Expr::Constant(0),
-            ast::Expr::Var(v) => Expr::Var(v),
-            ast::Expr::UnOp(op, sub) => Expr::UnOp(op, Box::new((*sub).into())),
-            ast::Expr::BinOp(op, left, right) => {
-                Expr::BinOp(op, Box::new((*left).into()), Box::new((*right).into()))
+impl Generator {
+    fn new() -> Generator {
+        Generator { functions: vec![] }
+    }
+
+    fn add(&mut self, code: GeneratedCode) {
+        self.functions.push(code)
+    }
+}
+
+impl fmt::Display for Generator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\t.text")?;
+        write!(f, "\n\t.extern alloc")?;
+        write!(f, "\n\t.extern make_closure")?;
+        write!(f, "\n\t.extern make_recursive_closure")?;
+        write!(f, "\n\t.globl entry")?;
+        write!(f, "\n\t.type entry, @function")?;
+        for function in self.functions.iter() {
+            write!(f, "{}", function)?;
+        }
+        write!(f, "\n")
+    }
+}
+
+impl Code {
+    fn emit_var(&mut self, v: String) -> &mut Code {
+        let loc = self.get(v);
+        self.mov(loc, rax())
+    }
+
+    fn emit_unop(&mut self, op: UnOp, expr: Expr, generator: &mut Generator) -> &mut Code {
+        use self::UnOp::*;
+        self.emit(expr, generator);
+        match op {
+            Neg => self.neg(rax()),
+            Not => self.not(rax()),
+        }
+    }
+
+    fn emit_binop(
+        &mut self,
+        op: BinOp,
+        left: Expr,
+        right: Expr,
+        generator: &mut Generator,
+    ) -> &mut Code {
+        use self::BinOp::*;
+        match op {
+            And => {
+                let label = Label::new();
+                self.emit(left, generator)
+                    .cmp(constant(1), rax())
+                    .jne(label)
+                    .emit(right, generator)
+                    .label(label)
             }
-            ast::Expr::If(condition, left, right) => Expr::If(
-                Box::new((*condition).into()),
-                Box::new((*left).into()),
-                Box::new((*right).into()),
-            ),
-            ast::Expr::While(condition, sub) => {
-                Expr::While(Box::new((*condition).into()), Box::new((*sub).into()))
+            Or => {
+                let label = Label::new();
+                self.emit(left, generator)
+                    .cmp(constant(1), rax())
+                    .je(label)
+                    .emit(right, generator)
+                    .label(label)
             }
-            ast::Expr::Seq(seq) => Expr::Seq(seq.into_iter().map(|x| x.into()).collect()),
-            ast::Expr::Pair(left, right) => {
-                Expr::Pair(Box::new((*left).into()), Box::new((*right).into()))
-            }
-            ast::Expr::Fst(sub) => Expr::Fst(Box::new((*sub).into())),
-            ast::Expr::Snd(sub) => Expr::Snd(Box::new((*sub).into())),
-            ast::Expr::Inl(sub) => Expr::Inl(Box::new((*sub).into())),
-            ast::Expr::Inr(sub) => Expr::Inr(Box::new((*sub).into())),
-            ast::Expr::Ref(sub) => Expr::Ref(Box::new((*sub).into())),
-            ast::Expr::Deref(sub) => Expr::Deref(Box::new((*sub).into())),
-            ast::Expr::Assign(left, right) => {
-                Expr::Assign(Box::new((*left).into()), Box::new((*right).into()))
-            }
-            ast::Expr::Lambda((v, sub)) => Expr::Lambda(v, Box::new((*sub).into())),
-            ast::Expr::App(left, right) => {
-                Expr::App(Box::new((*left).into()), Box::new((*right).into()))
-            }
-            ast::Expr::Case(sub, (v_left, sub_left), (v_right, sub_right)) => Expr::Case(
-                Box::new((*sub).into()),
-                (v_left, Box::new((*sub_left).into())),
-                (v_right, Box::new((*sub_right).into())),
-            ),
-            ast::Expr::LetFun(f, (v, sub), body) => {
-                Expr::LetFun(f, (v, Box::new((*sub).into())), Box::new((*body).into()))
+            _ => {
+                self.emit(left, generator)
+                    .push(rax())
+                    .emit(right, generator)
+                    .mov(rax(), rbx())
+                    .pop(rax());
+                match op {
+                    Add => self.add(rbx(), rax()),
+                    Sub => self.sub(rbx(), rax()),
+                    Mul => self.mul(rbx(), rax()),
+                    Div => self.cqto().div(rbx()),
+                    Lt => {
+                        let false_label = Label::new();
+                        let exit_label = Label::new();
+                        self.cmp(rbx(), rax())
+                            .jge(false_label)
+                            .mov(constant(1), rax())
+                            .jmp(exit_label)
+                            .label(false_label)
+                            .mov(constant(0), rax())
+                            .label(exit_label)
+                    }
+                    Eq => {
+                        let false_label = Label::new();
+                        let exit_label = Label::new();
+                        self.cmp(rbx(), rax())
+                            .jne(false_label)
+                            .mov(constant(1), rax())
+                            .jmp(exit_label)
+                            .label(false_label)
+                            .mov(constant(0), rax())
+                            .label(exit_label)
+                    }
+                    _ => unreachable!(),
+                }
             }
         }
     }
+
+    fn emit_if(
+        &mut self,
+        condition: Expr,
+        left: Expr,
+        right: Expr,
+        generator: &mut Generator,
+    ) -> &mut Code {
+        let false_label = Label::new();
+        let exit_label = Label::new();
+        self.emit(condition, generator)
+            .cmp(constant(1), rax())
+            .jne(false_label)
+            .emit(left, generator)
+            .jmp(exit_label)
+            .label(false_label)
+            .emit(right, generator)
+            .label(exit_label)
+    }
+
+    fn emit_while(&mut self, condition: Expr, sub: Expr, generator: &mut Generator) -> &mut Code {
+        let loop_label = Label::new();
+        let exit_label = Label::new();
+        self.label(loop_label)
+            .emit(condition, generator)
+            .cmp(constant(1), rax())
+            .jne(exit_label)
+            .emit(sub, generator)
+            .jmp(loop_label)
+            .label(exit_label)
+    }
+
+    fn emit_seq(&mut self, seq: Vec<Expr>, generator: &mut Generator) -> &mut Code {
+        for sub in seq.into_iter() {
+            self.emit(sub, generator);
+        }
+        self
+    }
+
+    fn emit_ref(&mut self, sub: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(sub, generator)
+            .push(rax())
+            .xor(rax(), rax())
+            .call_rt("alloc")
+            .pop(rbx())
+            .mov(rbx(), deref(rax(), 0))
+    }
+
+    fn emit_pair(&mut self, left: Expr, right: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(left, generator)
+            .push(rax())
+            .emit(right, generator)
+            .push(rax())
+            .call_rt("alloc")
+            .pop(deref(rax(), 8))
+            .pop(deref(rax(), 0))
+    }
+
+    fn emit_assign(&mut self, left: Expr, right: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(left, generator)
+            .push(rax())
+            .emit(right, generator)
+            .pop(rbx())
+            .mov(rax(), deref(rbx(), 0))
+            .mov(constant(0), rax())
+    }
+
+    fn emit_app(&mut self, left: Expr, right: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(left, generator)
+            .push(rax())
+            .emit(right, generator)
+            .mov(rax(), rdi())
+            .pop(rax())
+            .mov(deref(rax(), 8), rsi())
+            .mov(deref(rax(), 0), rax())
+            .call(rax())
+    }
+
+    fn emit_lambda(&mut self, v: String, expr: Expr, generator: &mut Generator) -> &mut Code {
+        let label = Label::new();
+        let mut lambda = Code::new(label);
+        let v = lambda.allocate(v);
+        // TODO constrain to free variables
+        for (i, (envv, _)) in self.get_env().iter().enumerate() {
+            let loc = lambda.allocate(envv.clone());
+            lambda
+                .mov(deref(rsi(), 8 * i as i64), rax())
+                .mov(rax(), loc);
+        }
+        lambda.mov(rdi(), v).emit(expr, generator);
+        generator.add(lambda.ret());
+        for (i, (_, loc)) in self.get_env().clone().iter().enumerate().rev() {
+            match i {
+                0 => self.mov(*loc, rdx()),
+                1 => self.mov(*loc, rcx()),
+                2 => self.mov(*loc, r8()),
+                3 => self.mov(*loc, r9()),
+                _ => self.push(*loc),
+            };
+        }
+        let env_len = self.get_env().len();
+        self.lea(relative(rip(), label), rdi())
+            .mov(constant(env_len as i64), rsi())
+            .xor(rax(), rax())
+            .call_rt("make_closure");
+        if env_len > 4 {
+            let allocated = (env_len - 4) * 8;
+            self.add(constant(allocated as i64), rsp())
+        } else {
+            self
+        }
+    }
+
+    fn emit_recursive_lambda(
+        &mut self,
+        f: String,
+        v: String,
+        expr: Expr,
+        generator: &mut Generator,
+    ) -> &mut Code {
+        let label = Label::new();
+        let mut lambda = Code::new(label);
+        let v = lambda.allocate(v);
+        let f = lambda.allocate(f);
+        // TODO constrain to free variables
+        lambda.mov(deref(rsi(), 0), rax()).mov(rax(), f);
+        for (i, (envv, _)) in self.get_env().iter().enumerate() {
+            let loc = lambda.allocate(envv.clone());
+            lambda
+                .mov(deref(rsi(), 8 * (i + 1) as i64), rax())
+                .mov(rax(), loc);
+        }
+        lambda.mov(rdi(), v).emit(expr, generator);
+        generator.add(lambda.ret());
+        for (i, (_, loc)) in self.get_env().clone().iter().enumerate().rev() {
+            match i {
+                0 => self.mov(*loc, rdx()),
+                1 => self.mov(*loc, rcx()),
+                2 => self.mov(*loc, r8()),
+                3 => self.mov(*loc, r9()),
+                _ => self.push(*loc),
+            };
+        }
+        let env_len = self.get_env().len();
+        self.lea(relative(rip(), label), rdi())
+            .mov(constant(env_len as i64), rsi())
+            .xor(rax(), rax())
+            .call_rt("make_recursive_closure");
+        if env_len > 4 {
+            let allocated = (env_len - 4) * 8;
+            self.add(constant(allocated as i64), rsp())
+        } else {
+            self
+        }
+    }
+
+    fn emit_inl(&mut self, sub: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(sub, generator)
+            .push(rax())
+            .xor(rax(), rax())
+            .call_rt("alloc")
+            .pop(deref(rax(), 8))
+            .mov(constant(0), deref(rax(), 0))
+    }
+
+    fn emit_inr(&mut self, sub: Expr, generator: &mut Generator) -> &mut Code {
+        self.emit(sub, generator)
+            .push(rax())
+            .xor(rax(), rax())
+            .call_rt("alloc")
+            .pop(deref(rax(), 8))
+            .mov(constant(1), deref(rax(), 0))
+    }
+
+    fn emit_case(
+        &mut self,
+        sub: Expr,
+        left: (String, Box<Expr>),
+        right: (String, Box<Expr>),
+        generator: &mut Generator,
+    ) -> &mut Code {
+        let inr = Label::new();
+        let skip = Label::new();
+        let v_left = self.allocate(left.0);
+        let v_right = self.allocate(right.0);
+        self.emit(sub, generator)
+            .mov(deref(rax(), 0), rbx())
+            .cmp(constant(0), rbx())
+            .jne(inr)
+            .mov(deref(rax(), 8), rax())
+            .mov(rax(), v_left)
+            .emit(*left.1, generator)
+            .jmp(skip)
+            .label(inr)
+            .mov(deref(rax(), 8), rax())
+            .mov(rax(), v_right)
+            .emit(*right.1, generator)
+            .label(skip)
+    }
+
+    fn emit_let(
+        &mut self,
+        v: String,
+        sub: Expr,
+        body: Expr,
+        generator: &mut Generator,
+    ) -> &mut Code {
+        let v = self.allocate(v);
+        self.emit(sub, generator)
+            .mov(rax(), v)
+            .emit(body, generator)
+    }
+
+    fn emit_let_fun(
+        &mut self,
+        f: String,
+        sub: (String, Box<Expr>),
+        body: Expr,
+        generator: &mut Generator,
+    ) -> &mut Code {
+        self.emit_recursive_lambda(f.clone(), sub.0, *sub.1, generator);
+        let v = self.allocate(f);
+        self.mov(rax(), v).emit(body, generator)
+    }
+
+    fn emit(&mut self, expr: Expr, generator: &mut Generator) -> &mut Code {
+        use Expr::*;
+        match expr {
+            Int(i) => self.mov(constant(i), rax()),
+            Bool(b) => self.mov(constant(if b { 1 } else { 0 }), rax()),
+            Unit => self.mov(constant(0), rax()),
+            What => unimplemented!(),
+            Var(v) => self.emit_var(v),
+            UnOp(op, sub) => self.emit_unop(op, *sub, generator),
+            BinOp(op, left, right) => self.emit_binop(op, *left, *right, generator),
+            If(condition, left, right) => self.emit_if(*condition, *left, *right, generator),
+            While(condition, sub) => self.emit_while(*condition, *sub, generator),
+            Seq(seq) => self.emit_seq(seq, generator),
+            Ref(sub) => self.emit_ref(*sub, generator),
+            Deref(sub) => self.emit(*sub, generator).mov(deref(rax(), 0), rax()),
+            Fst(sub) => self.emit(*sub, generator).mov(deref(rax(), 0), rax()),
+            Snd(sub) => self.emit(*sub, generator).mov(deref(rax(), 8), rax()),
+            Pair(left, right) => self.emit_pair(*left, *right, generator),
+            Assign(left, right) => self.emit_assign(*left, *right, generator),
+            App(left, right) => self.emit_app(*left, *right, generator),
+            Lambda((v, sub)) => self.emit_lambda(v, *sub, generator),
+            Inl(sub) => self.emit_inl(*sub, generator),
+            Inr(sub) => self.emit_inr(*sub, generator),
+            Case(sub, left, right) => self.emit_case(*sub, left, right, generator),
+            Let(v, sub, body) => self.emit_let(v, *sub, *body, generator),
+            LetFun(f, sub, body) => self.emit_let_fun(f, sub, *body, generator),
+        }
+    }
+}
+
+pub fn generate(file: &mut File, expr: Expr) -> io::Result<()> {
+    let mut generator = Generator::new();
+    let mut entry = Code::new("entry".into());
+    let entry = entry.emit(expr, &mut generator);
+    generator.add(entry.ret());
+    write!(file, "{}", generator)
 }

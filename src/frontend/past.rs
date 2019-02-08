@@ -1,49 +1,8 @@
+use super::ast::{BinOp, UnOp};
 use super::types::TypeExpr;
 use super::Locatable;
 
 use std::fmt;
-
-pub enum BinOp {
-    Add,
-    Mul,
-    Div,
-    Sub,
-    Lt,
-    And,
-    Or,
-    Eq,
-}
-
-impl fmt::Display for BinOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::BinOp::*;
-        match *self {
-            Add => write!(f, "+"),
-            Mul => write!(f, "*"),
-            Div => write!(f, "/"),
-            Sub => write!(f, "-"),
-            Lt => write!(f, "<"),
-            And => write!(f, "&&"),
-            Or => write!(f, "||"),
-            Eq => write!(f, "="),
-        }
-    }
-}
-
-pub enum UnOp {
-    Neg,
-    Not,
-}
-
-impl fmt::Display for UnOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use self::UnOp::*;
-        match *self {
-            Neg => write!(f, "-"),
-            Not => write!(f, "~"),
-        }
-    }
-}
 
 pub type Var = String;
 

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use super::ast::{BinOp, UnOp};
 use super::past::{Expr, Var};
 
 #[derive(Clone, PartialEq, Eq)]
@@ -49,15 +50,15 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, St
         Int(_) => Ok(TypeExpr::Int),
         Bool(_) => Ok(TypeExpr::Bool),
         UnOp(op, sub) => {
-            use super::past::UnOp::*;
+            use self::UnOp::*;
             match (op, infer(env, sub.borrow_raw())?) {
                 (Neg, TypeExpr::Int) => Ok(TypeExpr::Int),
                 (Not, TypeExpr::Bool) => Ok(TypeExpr::Bool),
-                _ => Err("Type mismatch".to_string()), // TODO properly
+                _ => Err("type mistmatch".to_string()),
             }
         }
         BinOp(op, left, right) => {
-            use super::past::BinOp::*;
+            use self::BinOp::*;
             match (
                 op,
                 infer(env, left.borrow_raw())?,

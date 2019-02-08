@@ -142,7 +142,13 @@ impl fmt::Display for Location {
         match *self {
             Constant(c) => write!(f, "${}", c),
             Register(r) => write!(f, "{}", r),
-            Memory(r, o) => write!(f, "{}({})", o, r),
+            Memory(r, o) => {
+                if o != 0 {
+                    write!(f, "{}({})", o, r)
+                } else {
+                    write!(f, "({})", r)
+                }
+            }
             Relative(r, l) => write!(f, "{}({})", l, r),
         }
     }
@@ -157,6 +163,8 @@ enum Instruction {
     Add(Location, Location),
     Sub(Location, Location),
     Mul(Location, Location),
+    Div(Location),
+    Cqto,
     Xor(Location, Location),
     Cmp(Location, Location),
     Jmp(Label),
@@ -165,7 +173,8 @@ enum Instruction {
     Jne(Label),
     Mov(Location, Location),
     Lea(Location, Location),
-    Call(&'static str),
+    Call(Location),
+    CallRuntime(&'static str),
     Ret,
 }
 
@@ -181,6 +190,8 @@ impl fmt::Display for Instruction {
             Add(source, target) => write!(f, "\n\taddq {},{}", source, target),
             Sub(source, target) => write!(f, "\n\tsubq {},{}", source, target),
             Mul(source, target) => write!(f, "\n\timulq {},{}", source, target),
+            Div(source) => write!(f, "\n\tidivq {}", source),
+            Cqto => write!(f, "\n\tcqto"),
             Xor(source, target) => write!(f, "\n\txorq {},{}", source, target),
             Cmp(source, target) => write!(f, "\n\tcmpq {},{}", source, target),
             Jmp(ref label) => write!(f, "\n\tjmp {}", label),
@@ -189,7 +200,8 @@ impl fmt::Display for Instruction {
             Jne(ref label) => write!(f, "\n\tjne {}", label),
             Mov(source, target) => write!(f, "\n\tmovq {},{}", source, target),
             Lea(source, target) => write!(f, "\n\tleaq {},{}", source, target),
-            Call(name) => write!(f, "\n\tcall {}", name),
+            Call(loc) => write!(f, "\n\tcall *{}", loc),
+            CallRuntime(name) => write!(f, "\n\tcall {}", name),
             Ret => write!(f, "\n\tret"),
         }
     }
@@ -220,93 +232,108 @@ impl Code {
         }
     }
 
-    pub fn label(mut self, label: Label) -> Code {
+    pub fn label(&mut self, label: Label) -> &mut Code {
         self.asm.push(Instruction::Label(label));
         self
     }
 
-    pub fn push(mut self, loc: Location) -> Code {
+    pub fn push(&mut self, loc: Location) -> &mut Code {
         self.asm.push(Instruction::Push(loc));
         self
     }
 
-    pub fn pop(mut self, loc: Location) -> Code {
+    pub fn pop(&mut self, loc: Location) -> &mut Code {
         self.asm.push(Instruction::Pop(loc));
         self
     }
 
-    pub fn mov(mut self, source: Location, target: Location) -> Code {
+    pub fn mov(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Mov(source, target));
         self
     }
 
-    pub fn lea(mut self, source: Location, target: Location) -> Code {
+    pub fn lea(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Lea(source, target));
         self
     }
 
-    pub fn not(mut self, loc: Location) -> Code {
+    pub fn not(&mut self, loc: Location) -> &mut Code {
         self.asm.push(Instruction::Not(loc));
         self
     }
 
-    pub fn neg(mut self, loc: Location) -> Code {
+    pub fn neg(&mut self, loc: Location) -> &mut Code {
         self.asm.push(Instruction::Neg(loc));
         self
     }
 
-    pub fn add(mut self, source: Location, target: Location) -> Code {
+    pub fn add(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Add(source, target));
         self
     }
 
-    pub fn sub(mut self, source: Location, target: Location) -> Code {
+    pub fn sub(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Sub(source, target));
         self
     }
 
-    pub fn mul(mut self, source: Location, target: Location) -> Code {
+    pub fn mul(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Mul(source, target));
         self
     }
 
-    pub fn xor(mut self, source: Location, target: Location) -> Code {
+    pub fn div(&mut self, source: Location) -> &mut Code {
+        self.asm.push(Instruction::Div(source));
+        self
+    }
+
+    pub fn cqto(&mut self) -> &mut Code {
+        self.asm.push(Instruction::Cqto);
+        self
+    }
+
+    pub fn xor(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Xor(source, target));
         self
     }
 
-    pub fn cmp(mut self, source: Location, target: Location) -> Code {
+    pub fn cmp(&mut self, source: Location, target: Location) -> &mut Code {
         self.asm.push(Instruction::Cmp(source, target));
         self
     }
 
-    pub fn jmp(mut self, label: Label) -> Code {
+    pub fn jmp(&mut self, label: Label) -> &mut Code {
         self.asm.push(Instruction::Jmp(label));
         self
     }
 
-    pub fn je(mut self, label: Label) -> Code {
+    pub fn je(&mut self, label: Label) -> &mut Code {
         self.asm.push(Instruction::Je(label));
         self
     }
 
-    pub fn jge(mut self, label: Label) -> Code {
+    pub fn jge(&mut self, label: Label) -> &mut Code {
         self.asm.push(Instruction::Jge(label));
         self
     }
 
-    pub fn jne(mut self, label: Label) -> Code {
+    pub fn jne(&mut self, label: Label) -> &mut Code {
         self.asm.push(Instruction::Jne(label));
         self
     }
 
-    pub fn call(mut self, name: &'static str) -> Code {
-        self.asm.push(Instruction::Call(name));
+    pub fn call(&mut self, loc: Location) -> &mut Code {
+        self.asm.push(Instruction::Call(loc));
         self
     }
 
-    pub fn ret(mut self) -> GeneratedCode {
-        self = self.mov(rbp(), rsp()).pop(rbx());
+    pub fn call_rt(&mut self, name: &'static str) -> &mut Code {
+        self.asm.push(Instruction::CallRuntime(name));
+        self
+    }
+
+    pub fn ret(&mut self) -> GeneratedCode {
+        self.mov(rbp(), rsp()).pop(rbp());
         if self.allocated > 0 {
             self.asm
                 .insert(0, Instruction::Sub(constant(self.allocated as i64), rsp()));
