@@ -1,4 +1,4 @@
-use super::frontend::ast::{BinOp, Expr, UnOp};
+use super::frontend::ast::{BinOp, Expr, Free, UnOp};
 
 mod x86;
 
@@ -195,31 +195,33 @@ impl Code {
             .call(rax())
     }
 
-    fn emit_lambda(&mut self, v: String, expr: Expr, generator: &mut Generator) -> &mut Code {
+    fn emit_lambda(&mut self, lambda: (String, Box<Expr>), generator: &mut Generator) -> &mut Code {
+        let fv = lambda
+            .fv()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect::<Vec<_>>();
+        let (v, expr) = (lambda.0, *lambda.1);
         let label = Label::new();
         let mut lambda = Code::new(label);
         let v = lambda.allocate(v);
-        // TODO constrain to free variables
-        for (i, (envv, _, enabled)) in self.get_env().iter().enumerate() {
-            if *enabled {
-                let loc = lambda.allocate(envv.clone());
-                lambda
-                    .mov(deref(rsi(), 8 * i as i64), rax())
-                    .mov(rax(), loc);
-            }
+        for (i, envv) in fv.iter().enumerate() {
+            let loc = lambda.allocate(envv.clone());
+            lambda
+                .mov(deref(rsi(), 8 * i as i64), rax())
+                .mov(rax(), loc);
         }
         lambda.mov(rdi(), v).emit(expr, generator);
         generator.add(lambda.ret());
-        for (i, (_, loc, enabled)) in self.get_env().clone().iter().enumerate().rev() {
-            if *enabled {
-                match i {
-                    0 => self.mov(*loc, rdx()),
-                    1 => self.mov(*loc, rcx()),
-                    2 => self.mov(*loc, r8()),
-                    3 => self.mov(*loc, r9()),
-                    _ => self.push(*loc),
-                };
-            }
+        for (i, envv) in fv.iter().enumerate().rev() {
+            let loc = self.get(envv.clone());
+            match i {
+                0 => self.mov(loc, rdx()),
+                1 => self.mov(loc, rcx()),
+                2 => self.mov(loc, r8()),
+                3 => self.mov(loc, r9()),
+                _ => self.push(loc),
+            };
         }
         let env_len = lambda.get_env().len() - 1;
         self.lea(relative(rip(), label), rdi())
@@ -237,36 +239,38 @@ impl Code {
     fn emit_recursive_lambda(
         &mut self,
         f: String,
-        v: String,
-        expr: Expr,
+        lambda: (String, Box<Expr>),
         generator: &mut Generator,
     ) -> &mut Code {
+        let fv = lambda
+            .fv()
+            .into_iter()
+            .map(|x| x.clone())
+            .filter(|x| x != &f)
+            .collect::<Vec<_>>();
+        let (v, expr) = (lambda.0, *lambda.1);
         let label = Label::new();
         let mut lambda = Code::new(label);
         let v = lambda.allocate(v);
         let f = lambda.allocate(f);
-        // TODO constrain to free variables
         lambda.mov(deref(rsi(), 0), rax()).mov(rax(), f);
-        for (i, (envv, _, enabled)) in self.get_env().iter().enumerate() {
-            if *enabled {
-                let loc = lambda.allocate(envv.clone());
-                lambda
-                    .mov(deref(rsi(), 8 * (i + 1) as i64), rax())
-                    .mov(rax(), loc);
-            }
+        for (i, envv) in fv.iter().enumerate() {
+            let loc = lambda.allocate(envv.clone());
+            lambda
+                .mov(deref(rsi(), 8 * (i + 1) as i64), rax())
+                .mov(rax(), loc);
         }
         lambda.mov(rdi(), v).emit(expr, generator);
         generator.add(lambda.ret());
-        for (i, (_, loc, enabled)) in self.get_env().clone().iter().enumerate().rev() {
-            if *enabled {
-                match i {
-                    0 => self.mov(*loc, rdx()),
-                    1 => self.mov(*loc, rcx()),
-                    2 => self.mov(*loc, r8()),
-                    3 => self.mov(*loc, r9()),
-                    _ => self.push(*loc),
-                };
-            }
+        for (i, envv) in fv.iter().enumerate().rev() {
+            let loc = self.get(envv.clone());
+            match i {
+                0 => self.mov(loc, rdx()),
+                1 => self.mov(loc, rcx()),
+                2 => self.mov(loc, r8()),
+                3 => self.mov(loc, r9()),
+                _ => self.push(loc),
+            };
         }
         let env_len = lambda.get_env().len() - 2;
         self.lea(relative(rip(), label), rdi())
@@ -308,21 +312,19 @@ impl Code {
     ) -> &mut Code {
         let inr = Label::new();
         let skip = Label::new();
-        let v_left = self.allocate(left.0);
-        let v_right = self.allocate(right.0);
         self.emit(sub, generator)
             .mov(deref(rax(), 0), rbx())
             .cmp(constant(0), rbx())
             .jne(inr)
-            .mov(deref(rax(), 8), rax())
-            .mov(rax(), v_left)
-            .emit(*left.1, generator)
-            .jmp(skip)
-            .label(inr)
-            .mov(deref(rax(), 8), rax())
-            .mov(rax(), v_right)
-            .emit(*right.1, generator)
-            .label(skip)
+            .mov(deref(rax(), 8), rax());
+        let v_left = self.allocate(left.0.clone());
+        self.mov(rax(), v_left).emit(*left.1, generator);
+        self.deallocate(left.0);
+        self.jmp(skip).label(inr).mov(deref(rax(), 8), rax());
+        let v_right = self.allocate(right.0.clone());
+        self.mov(rax(), v_right).emit(*right.1, generator);
+        self.deallocate(right.0);
+        self.label(skip)
     }
 
     fn emit_let(
@@ -343,11 +345,11 @@ impl Code {
     fn emit_let_fun(
         &mut self,
         f: String,
-        sub: (String, Box<Expr>),
+        lambda: (String, Box<Expr>),
         body: Expr,
         generator: &mut Generator,
     ) -> &mut Code {
-        self.emit_recursive_lambda(f.clone(), sub.0, *sub.1, generator);
+        self.emit_recursive_lambda(f.clone(), lambda, generator);
         let loc = self.allocate(f.clone());
         self.mov(rax(), loc).emit(body, generator);
         self.deallocate(f);
@@ -374,12 +376,12 @@ impl Code {
             Pair(left, right) => self.emit_pair(*left, *right, generator),
             Assign(left, right) => self.emit_assign(*left, *right, generator),
             App(left, right) => self.emit_app(*left, *right, generator),
-            Lambda((v, sub)) => self.emit_lambda(v, *sub, generator),
+            Lambda(lambda) => self.emit_lambda(lambda, generator),
             Inl(sub) => self.emit_inl(*sub, generator),
             Inr(sub) => self.emit_inr(*sub, generator),
             Case(sub, left, right) => self.emit_case(*sub, left, right, generator),
             Let(v, sub, body) => self.emit_let(v, *sub, *body, generator),
-            LetFun(f, sub, body) => self.emit_let_fun(f, sub, *body, generator),
+            LetFun(f, lambda, body) => self.emit_let_fun(f, lambda, *body, generator),
         }
     }
 }

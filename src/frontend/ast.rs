@@ -1,4 +1,5 @@
 use super::past;
+use std::collections::HashSet;
 use std::fmt;
 
 pub enum BinOp {
@@ -43,9 +44,23 @@ impl fmt::Display for UnOp {
     }
 }
 
+pub trait Free {
+    fn fv(&self) -> HashSet<&Var>;
+}
+
 type Var = String;
 
 pub type Lambda = (Var, Box<Expr>);
+
+impl Free for Lambda {
+    fn fv(&self) -> HashSet<&Var> {
+        let mut fv = self.1.fv();
+        if fv.contains(&self.0) {
+            fv.remove(&self.0);
+        }
+        fv
+    }
+}
 
 pub enum Expr {
     Unit,
@@ -71,6 +86,70 @@ pub enum Expr {
     App(Box<Expr>, Box<Expr>),
     Let(Var, Box<Expr>, Box<Expr>),
     LetFun(Var, Lambda, Box<Expr>),
+}
+
+impl Free for Expr {
+    fn fv(&self) -> HashSet<&Var> {
+        use self::Expr::*;
+        match *self {
+            Unit | What | Int(_) | Bool(_) => HashSet::new(),
+            Var(ref v) => {
+                let mut fv = HashSet::new();
+                fv.insert(v);
+                fv
+            }
+            UnOp(_, ref sub)
+            | Fst(ref sub)
+            | Snd(ref sub)
+            | Inl(ref sub)
+            | Inr(ref sub)
+            | Ref(ref sub)
+            | Deref(ref sub) => sub.fv(),
+            BinOp(_, ref left, ref right)
+            | Pair(ref left, ref right)
+            | Assign(ref left, ref right)
+            | While(ref left, ref right)
+            | App(ref left, ref right) => left.fv().union(&right.fv()).map(|x| *x).collect(),
+            If(ref condition, ref left, ref right) => condition
+                .fv()
+                .union(&left.fv())
+                .map(|x| *x)
+                .collect::<HashSet<_>>()
+                .union(&right.fv())
+                .map(|x| *x)
+                .collect(),
+            Seq(ref seq) => {
+                let mut fv = HashSet::new();
+                for sub in seq.iter() {
+                    fv = fv.union(&sub.fv()).map(|x| *x).collect()
+                }
+                fv
+            }
+            Lambda(ref lambda) => lambda.fv(),
+            Let(ref v, ref sub, ref body) => {
+                let mut fv = body.fv();
+                if fv.contains(&v) {
+                    fv.remove(&v);
+                }
+                fv.union(&sub.fv()).map(|x| *x).collect()
+            }
+            LetFun(ref v, ref lambda, ref body) => {
+                let mut fv = body.fv();
+                if fv.contains(&v) {
+                    fv.remove(&v);
+                }
+                fv.union(&lambda.fv()).map(|x| *x).collect()
+            }
+            Case(ref sub, ref left, ref right) => sub
+                .fv()
+                .union(&left.fv())
+                .map(|x| *x)
+                .collect::<HashSet<_>>()
+                .union(&right.fv())
+                .map(|x| *x)
+                .collect(),
+        }
+    }
 }
 
 impl<'a> From<past::SubExpr> for Box<Expr> {
