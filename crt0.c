@@ -67,7 +67,22 @@ slang_ptr make_recursive_closure(slang_ptr (*f)(slang_ptr, slang_ptr *),
   return built;
 }
 
+slang_ptr what() {
+  int64_t got = 0;
+  printf("> ");
+  int result = scanf("%lld", &got);
+  if (result == EOF) {
+    fprintf(stderr, "stdin died :(\n");
+    exit(1);
+  }
+  if (result == 0) {
+    while (fgetc(stdin) != '\n')
+      ;
+  }
+  return (slang_ptr)got;
+}
+
 int main() {
-  printf("%d\n", entry());
+  printf("%lld\n", entry());
   return 0;
 }

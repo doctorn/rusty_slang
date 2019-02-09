@@ -217,7 +217,7 @@ impl fmt::Display for GeneratedCode {
 
 pub struct Code {
     label: Label,
-    env: Vec<(String, Location)>,
+    env: Vec<(String, Location, bool)>,
     allocated: usize,
     asm: Vec<Instruction>,
 }
@@ -346,19 +346,34 @@ impl Code {
     }
 
     pub fn allocate(&mut self, v: String) -> Location {
+        for (envv, loc, enabled) in self.env.iter_mut().rev() {
+            if envv == &v && !*enabled {
+                *enabled = true;
+                return *loc;
+            }
+        }
         self.allocated += 8;
         let loc = deref(rbp(), -(self.allocated as i64));
-        self.env.push((v, loc));
+        self.env.push((v, loc, true));
         loc
     }
 
-    pub fn get_env(&self) -> &Vec<(String, Location)> {
+    pub fn deallocate(&mut self, v: String) {
+        for (envv, _, enabled) in self.env.iter_mut().rev() {
+            if envv == &v && *enabled {
+                *enabled = false;
+                break;
+            }
+        }
+    }
+
+    pub fn get_env(&self) -> &Vec<(String, Location, bool)> {
         &self.env
     }
 
     pub fn get(&self, v: String) -> Location {
-        for (envv, loc) in self.env.iter().rev() {
-            if &v == envv {
+        for (envv, loc, enabled) in self.env.iter().rev() {
+            if &v == envv && *enabled {
                 return *loc;
             }
         }

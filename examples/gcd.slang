@@ -1,4 +1,3 @@
-
 let gcd(p : int * int) : int = 
     let m : int = fst p in 
        let n : int = snd p in 

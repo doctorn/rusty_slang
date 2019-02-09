@@ -1,5 +1,12 @@
+(*
+let x : int = 3 in
+  (let x : int = 4 in x end) + x
+end
+*)
+
 (* (fun (x: int) -> x end) 3 *)
 
+(*
 let fib(m : int) : int = 
   if m = 0 then 
     0
@@ -11,8 +18,9 @@ let fib(m : int) : int =
     end
   end 
 in
-  fib 10
+  fib ?
 end
+*)
 
 (*
 let x : int ref = ref 3 in
@@ -23,6 +31,7 @@ let x : int ref = ref 3 in
 end
 *)
 
+(*
 let fib (m : int) : int =
   let i : int ref = ref 0 
   in let a : int ref = ref 0 
@@ -44,8 +53,9 @@ let fib (m : int) : int =
   end
   end
 in
-  fib 30
+  fib ?
 end
+*)
 
 (*
 let add : int -> int -> int = 
@@ -75,31 +85,32 @@ end) ref 3 *)
   end
 end *)
 
-(*
-let i : int ref = ref 0 in
-  while !i < 1000 do
-    begin
-      let x : int = 3 in
-        let y : int = 4 in
-          let z : int = 5 in
-            let w : int = 6 in
-              let a : int = 1 in
-                let b : int = 1 in
-                  let c : int = 1 in
-                    let d : int = 1 in
-                      x + y + z + w + a + b + c + d
+begin
+  let i : int ref = ref 0 in
+    while !i < 1000 do
+      begin
+        let x : int = 3 in
+          let y : int = 4 in
+            let z : int = 5 in
+              let w : int = 6 in
+                let a : int = 1 in
+                  let b : int = 1 in
+                    let c : int = 1 in
+                      let d : int = 1 in
+                        x + y + z + w + a + b + c + d
+                      end
                     end
                   end
                 end
               end
             end
           end
-        end
-      end;
-      i := !i + 1
+        end;
+        i := !i + 1
+      end
     end
-  end
+  end;
+  10
 end
-*)
 
 (* 3 * ((8 + 17) * (2 - 6)) *)
