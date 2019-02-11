@@ -1,5 +1,5 @@
 [package]
-name = "slang"
+name = "rusty_slang"
 version = "0.1.0"
 authors = ["Nathan Corbyn <me@nathancorbyn.com>"]
 edition = "2018"
