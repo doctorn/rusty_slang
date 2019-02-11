@@ -25,17 +25,17 @@ impl Generator {
 
 impl fmt::Display for Generator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "\t.text")?;
-        write!(f, "\n\t.extern alloc")?;
-        write!(f, "\n\t.extern make_closure")?;
-        write!(f, "\n\t.extern make_recursive_closure")?;
-        write!(f, "\n\t.extern what")?;
-        write!(f, "\n\t.globl entry")?;
-        write!(f, "\n\t.type entry, @function")?;
+        writeln!(f, "\t.text")?;
+        writeln!(f, "\t.extern alloc")?;
+        writeln!(f, "\t.extern make_closure")?;
+        writeln!(f, "\t.extern make_recursive_closure")?;
+        writeln!(f, "\t.extern what")?;
+        writeln!(f, "\t.globl entry")?;
+        writeln!(f, "\t.type entry, @function")?;
         for function in self.functions.iter() {
             write!(f, "{}", function)?;
         }
-        write!(f, "\n")
+        Ok(())
     }
 }
 
