@@ -1,4 +1,4 @@
-# slang
+# rusty\_slang
 ### s(imple)lang(uage)
 
 Compiler implementation to compliment compiler construction course.
@@ -23,12 +23,18 @@ You may need to add the following directories to your `PATH` if they aren't adde
 ~/.rustup/nightly-{% your triple %}/bin/
 ```
 
+To get the compiler simple clone this repository!
+
+```sh
+git clone https://github.com/doctorn/rusty_slang.git
+```
+
 To compile a program, you'll need to use `x.sh` (this will automatically build the compiler). 
 
 Example:
 
 ```sh
-x.sh examples/expr.slang
+./x.sh examples/expr.slang
 ```
 
 This should give you two files: `expr.s` (the generated assembly) and `expr` the linked binary.
