@@ -2,6 +2,7 @@ use std::fmt;
 
 use super::ast::{BinOp, UnOp};
 use super::past::{Expr, Var};
+use super::{log, Locatable};
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum TypeExpr {
@@ -41,8 +42,10 @@ fn find(env: &Vec<(Var, TypeExpr)>, v: &Var) -> Result<TypeExpr, String> {
     Err(format!("'{}' is not defined", v))
 }
 
-pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, String> {
+pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<TypeExpr, String> {
     use Expr::*;
+    let loc = expr.location();
+    let expr = expr.borrow_raw();
     match expr {
         Unit => Ok(TypeExpr::Unit),
         What => Ok(TypeExpr::Int),
@@ -51,26 +54,51 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, St
         Bool(_) => Ok(TypeExpr::Bool),
         UnOp(op, sub) => {
             use self::UnOp::*;
-            match (op, infer(env, sub.borrow_raw())?) {
+            match (op, infer(env, sub)?) {
                 (Neg, TypeExpr::Int) => Ok(TypeExpr::Int),
                 (Not, TypeExpr::Bool) => Ok(TypeExpr::Bool),
-                _ => Err("type mistmatch".to_string()),
+                (Neg, t) => Err(log::type_error(
+                    loc,
+                    format!(
+                        "'{}' expects an operand of type '{}', found '{}'",
+                        Neg,
+                        TypeExpr::Int,
+                        t
+                    ),
+                    expr,
+                )),
+                (Not, t) => Err(log::type_error(
+                    loc,
+                    format!(
+                        "'{}' expects an operand of type '{}', found '{}'",
+                        Not,
+                        TypeExpr::Bool,
+                        t,
+                    ),
+                    expr,
+                )),
             }
         }
         BinOp(op, left, right) => {
             use self::BinOp::*;
-            match (
-                op,
-                infer(env, left.borrow_raw())?,
-                infer(env, right.borrow_raw())?,
-            ) {
+            match (op, infer(env, left)?, infer(env, right)?) {
                 (Lt, TypeExpr::Int, TypeExpr::Int) => Ok(TypeExpr::Bool),
                 (Add, TypeExpr::Int, TypeExpr::Int) => Ok(TypeExpr::Int),
                 (Sub, TypeExpr::Int, TypeExpr::Int) => Ok(TypeExpr::Int),
                 (Mul, TypeExpr::Int, TypeExpr::Int) => Ok(TypeExpr::Int),
                 (Div, TypeExpr::Int, TypeExpr::Int) => Ok(TypeExpr::Int),
-                (Lt, _, _) | (Add, _, _) | (Sub, _, _) | (Mul, _, _) | (Div, _, _) => {
-                    Err(format!("'{}' expects integer operands", op))
+                (Lt, t1, t2) | (Add, t1, t2) | (Sub, t1, t2) | (Mul, t1, t2) | (Div, t1, t2) => {
+                    Err(log::type_error(
+                        loc,
+                        format!(
+                            "'{}' expects operands of type '{}', found '{}' and '{}'",
+                            op,
+                            TypeExpr::Int,
+                            t1,
+                            t2
+                        ),
+                        expr,
+                    ))
                 }
                 (Or, TypeExpr::Bool, TypeExpr::Bool) => Ok(TypeExpr::Bool),
                 (And, TypeExpr::Bool, TypeExpr::Bool) => Ok(TypeExpr::Bool),
@@ -79,74 +107,126 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, St
                     if t1 == t2 {
                         Ok(TypeExpr::Bool)
                     } else {
-                        Err("'=' expects operands of the same type".to_string())
+                        Err(log::type_error(
+                            loc,
+                            format!(
+                                "'=' expects operands of the same type, found '{}' and '{}'",
+                                t1, t2
+                            ),
+                            expr,
+                        ))
                     }
                 }
             }
         }
         If(condition, left, right) => {
-            if let TypeExpr::Bool = infer(env, condition.borrow_raw())? {
-                let left = infer(env, left.borrow_raw())?;
-                let right = infer(env, right.borrow_raw())?;
-                if left == right {
-                    Ok(left)
+            let t1 = infer(env, condition)?;
+            if let TypeExpr::Bool = t1 {
+                let t2 = infer(env, left)?;
+                let t3 = infer(env, right)?;
+                if t2 == t3 {
+                    Ok(t2)
                 } else {
-                    Err("Type mismatch".to_string()) // TODO proper errors
+                    Err(log::type_error(
+                        loc,
+                        format!(
+                            "branches must have the same type, found '{}' and '{}'",
+                            t2, t3
+                        ),
+                        expr,
+                    ))
                 }
             } else {
-                Err("Condition must have type 'bool'".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!(
+                        "a branch condition must have type '{}', found '{}'",
+                        TypeExpr::Bool,
+                        t1
+                    ),
+                    expr,
+                ))
             }
         }
         Pair(left, right) => Ok(TypeExpr::Product(
-            Box::new(infer(env, left.borrow_raw())?),
-            Box::new(infer(env, right.borrow_raw())?),
+            Box::new(infer(env, left)?),
+            Box::new(infer(env, right)?),
         )),
         Fst(sub) => {
-            if let TypeExpr::Product(left, _) = infer(env, sub.borrow_raw())? {
+            let t = infer(env, sub)?;
+            if let TypeExpr::Product(left, _) = t {
                 Ok(*left)
             } else {
-                Err("Can only project from a product type".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("can only project from a product type, found '{}'", t),
+                    expr,
+                ))
             }
         }
         Snd(sub) => {
-            if let TypeExpr::Product(_, right) = infer(env, sub.borrow_raw())? {
+            let t = infer(env, sub)?;
+            if let TypeExpr::Product(_, right) = t {
                 Ok(*right)
             } else {
-                Err("Can only project from a product type".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("can only project from a product type, found '{}'", t),
+                    expr,
+                ))
             }
         }
         Inl(sub, type_expr) => Ok(TypeExpr::Union(
-            Box::new(infer(env, sub.borrow_raw())?),
+            Box::new(infer(env, sub)?),
             Box::new(type_expr.clone()),
         )),
         Inr(sub, type_expr) => Ok(TypeExpr::Union(
             Box::new(type_expr.clone()),
-            Box::new(infer(env, sub.borrow_raw())?),
+            Box::new(infer(env, sub)?),
         )),
         Case(sub, (v_left, type_expr_left, sub_left), (v_right, type_expr_right, sub_right)) => {
-            if let TypeExpr::Union(infered_left, infered_right) = infer(env, sub.borrow_raw())? {
-                if *infered_left == *type_expr_left && *infered_right == *type_expr_right {
+            let t = infer(env, sub)?;
+            if let TypeExpr::Union(t1, t2) = t {
+                if *t1 == *type_expr_left && *t2 == *type_expr_right {
                     env.push((v_left.to_string(), type_expr_left.clone()));
-                    let left = infer(env, sub_left.borrow_raw())?;
+                    let left = infer(env, sub_left)?;
                     env.pop();
                     env.push((v_right.to_string(), type_expr_right.clone()));
-                    let right = infer(env, sub_right.borrow_raw())?;
+                    let right = infer(env, sub_right)?;
                     env.pop();
                     if left == right {
                         Ok(left)
                     } else {
-                        Err("Type mismatch".to_string())
+                        Err(log::type_error(
+                            loc,
+                            format!(
+                                "branches must have the same type, found '{}' and '{}'",
+                                left, right
+                            ),
+                            expr,
+                        ))
                     }
                 } else {
-                    Err("Type mismatch".to_string())
+                    Err(format!(
+                        "expected union of type '{}', found '{}'",
+                        TypeExpr::Union(t1, t2),
+                        TypeExpr::Union(
+                            Box::new(type_expr_left.clone()),
+                            Box::new(type_expr_right.clone())
+                        )
+                    ))
                 }
             } else {
-                Err("Expected a union".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("case expected a union type, found '{}'", t),
+                    expr,
+                ))
             }
         }
         Lambda((v, type_expr, sub)) => {
             env.push((v.to_string(), type_expr.clone()));
-            let other_type_expr = infer(env, sub.borrow_raw())?;
+            let other_type_expr = infer(env, sub)?;
             env.pop();
             Ok(TypeExpr::Arrow(
                 Box::new(type_expr.clone()),
@@ -154,63 +234,113 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, St
             ))
         }
         While(condition, sub) => {
-            if let TypeExpr::Bool = infer(env, condition.borrow_raw())? {
-                infer(env, sub.borrow_raw())?;
+            let t = infer(env, condition)?;
+            if let TypeExpr::Bool = t {
+                infer(env, sub)?;
                 Ok(TypeExpr::Unit)
             } else {
-                Err("Condition must have type 'bool'".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!(
+                        "a loop condition must have type '{}', found '{}'",
+                        TypeExpr::Bool,
+                        t
+                    ),
+                    expr,
+                ))
             }
         }
         Seq(seq) => {
             if seq.is_empty() {
-                Err("Found empty sequence".to_string())
+                Err(log::type_error(
+                    loc,
+                    "found empty sequence".to_string(),
+                    expr,
+                ))
             } else {
                 for sub in seq.iter() {
-                    infer(env, sub.borrow_raw())?;
+                    infer(env, sub)?;
                 }
-                infer(env, seq[seq.len() - 1].borrow_raw())
+                infer(env, &seq[seq.len() - 1])
             }
         }
-        Ref(sub) => Ok(TypeExpr::Ref(Box::new(infer(env, sub.borrow_raw())?))),
+        Ref(sub) => Ok(TypeExpr::Ref(Box::new(infer(env, sub)?))),
         Deref(sub) => {
-            if let TypeExpr::Ref(t) = infer(env, sub.borrow_raw())? {
+            let t = infer(env, sub)?;
+            if let TypeExpr::Ref(t) = t {
                 Ok(*t)
             } else {
-                Err("Expected a reference".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("cannot dereference something of type '{}'", t),
+                    expr,
+                ))
             }
         }
         Assign(left, right) => {
-            if let TypeExpr::Ref(t) = infer(env, left.borrow_raw())? {
-                let right = infer(env, right.borrow_raw())?;
+            let t = infer(env, left)?;
+            if let TypeExpr::Ref(t) = t {
+                let right = infer(env, right)?;
                 if *t == right {
                     Ok(TypeExpr::Unit)
                 } else {
-                    Err("Type mismatch".to_string())
+                    Err(log::type_error(
+                        loc,
+                        format!(
+                        "right hand side of assignment was expected to be of type '{}', found '{}'",
+                        t, right
+                    ),
+                        expr,
+                    ))
                 }
             } else {
-                Err("Not a reference".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!(
+                        "left hand side of assignment must be a reference type, found '{}'",
+                        t
+                    ),
+                    expr,
+                ))
             }
         }
         App(left, right) => {
-            if let TypeExpr::Arrow(from, to) = infer(env, left.borrow_raw())? {
-                if *from == infer(env, right.borrow_raw())? {
+            let t = infer(env, left)?;
+            if let TypeExpr::Arrow(from, to) = t {
+                let t = infer(env, right)?;
+                if *from == t {
                     Ok(*to)
                 } else {
-                    Err("Type mismatch".to_string())
+                    Err(log::type_error(
+                        loc,
+                        format!(
+                            "function was expecting argument of type '{}', found '{}'",
+                            from, t
+                        ),
+                        expr,
+                    ))
                 }
             } else {
-                Err("Not a function".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("expected a function type, found '{}'", t),
+                    expr,
+                ))
             }
         }
         Let(v, type_expr, sub, body) => {
-            let sub = infer(env, sub.borrow_raw())?;
-            if sub == *type_expr {
-                env.push((v.to_string(), type_expr.clone()));
-                let body = infer(env, body.borrow_raw())?;
+            let t = infer(env, sub)?;
+            if t == *type_expr {
+                env.push((v.to_string(), t));
+                let body = infer(env, body)?;
                 env.pop();
                 Ok(body)
             } else {
-                Err("Type mismatch".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!("expected expression of type '{}', found '{}'", type_expr, t),
+                    expr,
+                ))
             }
         }
         LetFun(fun, (v_lambda, type_expr_lambda, sub_lambda), type_expr, body) => {
@@ -220,12 +350,12 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Expr) -> Result<TypeExpr, St
             );
             env.push((v_lambda.to_string(), type_expr_lambda.clone()));
             env.push((fun.to_string(), fun_type_expr.clone()));
-            let lambda = infer(env, sub_lambda.borrow_raw())?;
+            let lambda = infer(env, sub_lambda)?;
             env.pop();
             env.pop();
             if lambda == *type_expr {
                 env.push((fun.to_string(), fun_type_expr));
-                let body = infer(env, body.borrow_raw())?;
+                let body = infer(env, body)?;
                 env.pop();
                 Ok(body)
             } else {

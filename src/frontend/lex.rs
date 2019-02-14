@@ -1,7 +1,8 @@
-use std::iter::Peekable;
+use std::fmt;
+use std::iter::{FusedIterator, Peekable};
 use std::mem::discriminant;
 
-use super::{Locatable, Location};
+use super::{log, Locatable, Location};
 
 #[derive(Debug, Eq)]
 pub enum Kind {
@@ -52,6 +53,66 @@ pub enum Kind {
     Ident(String),
 }
 
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::Kind::*;
+        match *self {
+            LParen => write!(f, "'('"),
+            RParen => write!(f, "')'"),
+            Comma => write!(f, "','"),
+            Colon => write!(f, "':'"),
+            Semi => write!(f, "';'"),
+            Add => write!(f, "'+'"),
+            Sub => write!(f, "'-'"),
+            Mul => write!(f, "'*'"),
+            Div => write!(f, "'/'"),
+            Not => write!(f, "'!'"),
+            Eq => write!(f, "'='"),
+            Assign => write!(f, "':='"),
+            Lt => write!(f, "'<'"),
+            AndOp => write!(f, "'&&'"),
+            OrOp => write!(f, "'||'"),
+            Bar => write!(f, "'|'"),
+            Arrow => write!(f, "'->'"),
+            What => write!(f, "'?'"),
+            Bang => write!(f, "'!'"),
+            Unit => write!(f, "unit '()'"),
+            And => write!(f, "keyword 'and'"),
+            True => write!(f, "boolean 'true'"),
+            False => write!(f, "boolean 'false'"),
+            Ref => write!(f, "keyword 'ref'"),
+            Inl => write!(f, "keyword 'inl'"),
+            Inr => write!(f, "keyword 'inr'"),
+            Fst => write!(f, "keyword 'fst'"),
+            Snd => write!(f, "keyword 'snd'"),
+            Case => write!(f, "keyword 'case'"),
+            Of => write!(f, "keyword 'of'"),
+            If => write!(f, "keyword 'if'"),
+            Then => write!(f, "keyword 'then'"),
+            Else => write!(f, "keyword 'else'"),
+            Let => write!(f, "keyword 'let'"),
+            Fun => write!(f, "keyword 'fun'"),
+            In => write!(f, "keyword 'in'"),
+            Begin => write!(f, "keyword 'begin'"),
+            End => write!(f, "keyword 'end'"),
+            While => write!(f, "keyword 'while'"),
+            Do => write!(f, "keyword 'do'"),
+            BoolType => write!(f, "typename 'bool'"),
+            IntType => write!(f, "typename 'int'"),
+            UnitType => write!(f, "typename 'unit'"),
+            Int(_) => write!(f, "integer"),
+            Ident(ref ident) => {
+                write!(f, "identifier")?;
+                if ident.len() > 0 {
+                    write!(f, " ('{}')", ident)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
 impl PartialEq for Kind {
     fn eq(&self, other: &Kind) -> bool {
         discriminant(self) == discriminant(other)
@@ -83,8 +144,8 @@ where
         }
     }
 
-    fn location(&self) -> Location {
-        Location::new(self.filename.clone(), self.line, self.column)
+    pub fn location(&self) -> Location {
+        Location::new(self.filename.clone(), self.line + 1, self.column)
     }
 
     fn advance(&mut self) {
@@ -235,7 +296,7 @@ where
                     if let Some('&') = self.chars.peek() {
                         AndOp
                     } else {
-                        return Err("No matching token class".to_string());
+                        return Err("no matching token class".to_string());
                     }
                 }
                 '|' => {
@@ -254,12 +315,12 @@ where
                     self.skip_whitespace();
                     return self.next_kind();
                 }
-                _ => return Err("No matching token class".to_string()),
+                _ => return Err("no matching token class".to_string()),
             };
             self.advance();
             Ok(kind)
         } else {
-            Err("Unexpected EOF".to_string())
+            Err("unexpected end of file".to_string())
         }
     }
 }
@@ -268,15 +329,15 @@ impl<T> Iterator for Lexer<T>
 where
     T: Iterator<Item = char>,
 {
-    type Item = Token;
+    type Item = Result<Token, String>;
 
-    fn next(&mut self) -> Option<Token> {
+    fn next(&mut self) -> Option<Result<Token, String>> {
         let location = self.location();
-        if let Ok(kind) = self.next_kind() {
-            Some((location, kind).into())
-        } else {
-            // TODO Print lex error
-            None
+        match self.next_kind() {
+            Ok(kind) => Some(Ok((location, kind).into())),
+            Err(err) => Some(Err(log::parse_error(&location, err))),
         }
     }
 }
+
+impl<T> FusedIterator for Lexer<T> where T: Iterator<Item = char> {}

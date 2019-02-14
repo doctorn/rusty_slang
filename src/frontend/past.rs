@@ -15,7 +15,7 @@ impl fmt::Display for SubExpr {
         use self::Expr::*;
         let sub = (*self).borrow_raw();
         match *sub {
-            Unit | What | Var(_) | Int(_) | Lambda(_) => write!(f, "{}", sub),
+            Unit | What | Var(_) | Int(_) | Bool(_) | App(_, _) => write!(f, "{}", sub),
             _ => write!(f, "({})", sub),
         }
     }

@@ -1,7 +1,6 @@
-use std::fmt;
-
 pub mod ast;
 mod lex;
+mod log;
 mod parse;
 mod past;
 mod types;
@@ -20,18 +19,6 @@ impl Location {
             line,
             column,
         }
-    }
-}
-
-impl fmt::Display for Location {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}: line {}: column {}: ",
-            self.filename,
-            self.line + 1,
-            self.column
-        )
     }
 }
 
@@ -66,16 +53,15 @@ impl<'a, T> Into<Location> for Locatable<T> {
     }
 }
 
-fn check(expr: &past::Expr) -> Result<(), String> {
-    println!("{}", types::infer(&mut vec![], &expr)?);
+fn check(expr: &Locatable<past::Expr>) -> Result<(), String> {
+    types::infer(&mut vec![], &expr)?;
     Ok(())
 }
 
-pub fn frontend(filename: String, text: String) -> Result<ast::Expr, String> {
-    let lexer = self::lex::Lexer::over(filename, text.chars());
+pub fn frontend(filename: &str, text: String) -> Result<ast::Expr, String> {
+    let lexer = self::lex::Lexer::over(filename.to_string(), text.chars());
     let mut parser = parse::Parser::new(lexer);
     let past = parser.parse()?;
-    println!("{}", past);
     check(&past)?;
-    Ok(past.into())
+    Ok(past.into_raw().into())
 }

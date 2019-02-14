@@ -1,17 +1,22 @@
+extern crate termion;
+
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 
 mod backend;
 mod frontend;
 
-pub fn compile(input: String, output: String) {
-    let mut input_file = OpenOptions::new().read(true).open(&input).unwrap(); // TODO proper error
+pub fn compile(input: &str, output: &str) {
+    let mut input_file = OpenOptions::new()
+        .read(true)
+        .open(input)
+        .expect("Failed to open file"); // TODO proper error
     let mut output_file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(output)
-        .unwrap(); // TODO proper error
+        .expect("Failed to open file"); // TODO proper error
     let mut text = String::new();
     input_file
         .read_to_string(&mut text)

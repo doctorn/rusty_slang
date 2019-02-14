@@ -4,18 +4,18 @@ use super::ast::{BinOp, UnOp};
 use super::lex::{Kind, Token};
 use super::past::Expr;
 use super::types::TypeExpr;
-use super::{Locatable, Location};
+use super::{log, Locatable, Location};
 
 pub struct Parser<T>
 where
-    T: Iterator<Item = Token>,
+    T: Iterator<Item = Result<Token, String>>,
 {
     tokens: Peekable<T>,
 }
 
 impl<T> Parser<T>
 where
-    T: Iterator<Item = Token>,
+    T: Iterator<Item = Result<Token, String>>,
 {
     pub fn new(t: T) -> Parser<T> {
         Parser {
@@ -23,34 +23,43 @@ where
         }
     }
 
-    fn location(&mut self) -> Location {
+    fn location(&mut self) -> Result<Location, String> {
         if let Some(token) = self.tokens.peek() {
-            token.location().clone()
+            match *token {
+                Ok(ref token) => Ok(token.location().clone()),
+                Err(ref err) => Err(err.to_string()),
+            }
         } else {
-            // TODO throw proper error
-            unimplemented!()
+            unreachable!()
         }
     }
 
     fn eat(&mut self, kind: Kind) -> Result<Token, String> {
-        if let Some(token) = self.tokens.next() {
-            if !token.borrow_raw().eq(&kind) {
-                Err(format!(
-                    "Expected '{:?}' got '{:?}'",
-                    kind,
-                    token.borrow_raw()
-                )) // TODO proper error (with location)
-            } else {
-                Ok(token)
-            }
+        let token = self.next()?;
+        if !token.borrow_raw().eq(&kind) {
+            Err(log::parse_error(
+                token.location(),
+                format!("expected {}, but got {}", kind, token.borrow_raw()),
+            ))
         } else {
-            Err("Unexpected end of file".to_string())
+            Ok(token)
+        }
+    }
+
+    fn next(&mut self) -> Result<Token, String> {
+        if let Some(token) = self.tokens.next() {
+            token
+        } else {
+            unreachable!()
         }
     }
 
     fn next_is(&mut self, kind: Kind) -> bool {
         if let Some(token) = self.tokens.peek() {
-            token.borrow_raw() == &kind
+            match token {
+                Ok(token) => token.borrow_raw() == &kind,
+                Err(_) => false,
+            }
         } else {
             false
         }
@@ -72,7 +81,11 @@ where
             self.eat(Kind::RParen)?;
             type_expr
         } else {
-            return Err("Expected type expression".to_string());
+            let token = self.next()?;
+            return Err(log::parse_error(
+                token.location(),
+                format!("expected a type expression, but got {}", token.borrow_raw()),
+            ));
         };
         while self.next_is(Kind::Ref) {
             self.eat(Kind::Ref)?;
@@ -110,7 +123,7 @@ where
     }
 
     fn next_factor(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let factor = if self.next_is(Kind::Unit) {
             self.eat(Kind::Unit)?;
             Expr::Unit
@@ -159,13 +172,17 @@ where
             self.eat(Kind::Sub)?;
             Expr::UnOp(UnOp::Neg, Box::new(self.next_factor()?))
         } else {
-            return Err("Expected an expression".to_string());
+            let token = self.next()?;
+            return Err(log::parse_error(
+                token.location(),
+                format!("expected an expression, but got {}", token.borrow_raw()),
+            ));
         };
         Ok((location, factor).into())
     }
 
     fn next_application(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let mut application = self.next_factor()?;
         while self.next_is(Kind::LParen)
             || self.next_is(Kind::True)
@@ -188,7 +205,7 @@ where
     }
 
     fn next_term(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let mut term = self.next_application()?;
         while self.next_is(Kind::Mul) || self.next_is(Kind::Div) {
             let op = if self.next_is(Kind::Mul) {
@@ -208,7 +225,7 @@ where
     }
 
     fn next_sum(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let mut sum = self.next_term()?;
         while self.next_is(Kind::Add) || self.next_is(Kind::Sub) {
             let op = if self.next_is(Kind::Add) {
@@ -228,7 +245,7 @@ where
     }
 
     fn next_comparison(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let comparison = self.next_sum()?;
         let comparison = if self.next_is(Kind::Lt) {
             self.eat(Kind::Lt)?;
@@ -243,7 +260,7 @@ where
     }
 
     fn next_conjunction(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let mut conjunction = self.next_comparison()?;
         while self.next_is(Kind::AndOp) {
             self.eat(Kind::AndOp)?;
@@ -261,7 +278,7 @@ where
     }
 
     fn next_disjunction(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let mut disjunction = self.next_conjunction()?;
         while self.next_is(Kind::OrOp) {
             self.eat(Kind::OrOp)?;
@@ -279,7 +296,7 @@ where
     }
 
     fn next_expression(&mut self) -> Result<Locatable<Expr>, String> {
-        let location = self.location();
+        let location = self.location()?;
         let expr = if self.next_is(Kind::Begin) {
             self.eat(Kind::Begin)?;
             let mut exprs = vec![Box::new(self.next_expression()?)];
@@ -408,7 +425,11 @@ where
                         unreachable!();
                     }
                 } else {
-                    return Err("Expected type annotation".to_string()); // TODO proper error
+                    let token = self.next()?;
+                    return Err(log::parse_error(
+                        token.location(),
+                        format!("expected a type annotation, but got {}", token.borrow_raw()),
+                    ));
                 }
             } else {
                 unreachable!()
@@ -426,7 +447,7 @@ where
         Ok((location, expr).into())
     }
 
-    pub fn parse(&mut self) -> Result<Expr, String> {
-        Ok(self.next_expression()?.into_raw())
+    pub fn parse(&mut self) -> Result<Locatable<Expr>, String> {
+        Ok(self.next_expression()?)
     }
 }
