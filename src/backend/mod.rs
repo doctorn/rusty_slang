@@ -5,9 +5,6 @@ mod x86;
 use x86::*;
 
 use std::fmt;
-use std::fs::File;
-use std::io;
-use std::io::prelude::*;
 
 struct Generator {
     functions: Vec<GeneratedCode>,
@@ -386,10 +383,10 @@ impl Code {
     }
 }
 
-pub fn generate(file: &mut File, expr: Expr) -> io::Result<()> {
+pub fn generate(expr: Expr) -> String {
     let mut generator = Generator::new();
     let mut entry = Code::new("entry".into());
     let entry = entry.emit(expr, &mut generator);
     generator.add(entry.ret());
-    write!(file, "{}", generator)
+    format!("{}", generator)
 }

@@ -18,7 +18,7 @@ impl fmt::Display for Location {
 
 pub fn parse_error(location: &Location, message: String) -> String {
     format!(
-        "{}{}parse error{}{}: {}{}",
+        "{}{}syntax error{}{}: {}{}",
         style::Bold,
         color::Fg(color::Red),
         color::Fg(color::Reset),
