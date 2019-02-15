@@ -27,6 +27,7 @@ To get the compiler simple clone this repository!
 
 ```sh
 git clone https://github.com/doctorn/rusty_slang.git
+cd rusty_slang
 ```
 
 To compile a program, you'll need to use `x.sh` (this will automatically build the compiler). 
@@ -44,3 +45,11 @@ Running the linked binary is as simple as:
 ```sh
 ./expr
 ```
+
+Assembly can be pretty cryptic, so I've added an option to generate comments for the assembly:
+
+```sh
+./x.sh examples/expr.slang -C
+```
+
+This should give you the same two files as before, but this time `expr.s` should contain some useful descriptions of the generated code!
