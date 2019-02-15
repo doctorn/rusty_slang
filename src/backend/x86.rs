@@ -337,7 +337,9 @@ impl Code {
     }
 
     pub fn comment(&mut self, comment: String) -> &mut Code {
-        self.asm.push(Instruction::Comment(comment));
+        if self.comments {
+            self.asm.push(Instruction::Comment(comment));
+        }
         self
     }
 
@@ -421,14 +423,7 @@ impl Code {
 impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in self.asm.iter() {
-            match line {
-                c @ Instruction::Comment(_) => {
-                    if self.comments {
-                        write!(f, "{}", c)?
-                    }
-                }
-                _ => write!(f, "{}", line)?,
-            };
+            write!(f, "{}", line)?;
         }
         Ok(())
     }
