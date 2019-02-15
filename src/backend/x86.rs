@@ -355,30 +355,36 @@ impl Code {
         if self.allocated > 0 {
             self.asm
                 .insert(0, Instruction::Sub(constant(self.allocated as i64), rsp()));
-            self.asm.insert(
-                0,
-                Instruction::Comment(format!(
+            if self.comments {
+                self.asm.insert(
+                    0,
+                    Instruction::Comment(format!(
                     "we need {} bytes for local variables so decrement stack pointer ('{}') by {}",
                     self.allocated,
                     rsp(),
                     self.allocated
                 )),
-            );
+                );
+            }
         }
         self.asm.insert(0, Instruction::Mov(rsp(), rbp()));
-        self.asm.insert(
-            0,
-            Instruction::Comment(format!(
-                "update base pointer ('{}') to stack pointer ('{}')",
-                rbp(),
-                rsp()
-            )),
-        );
+        if self.comments {
+            self.asm.insert(
+                0,
+                Instruction::Comment(format!(
+                    "update base pointer ('{}') to stack pointer ('{}')",
+                    rbp(),
+                    rsp()
+                )),
+            );
+        }
         self.asm.insert(0, Instruction::Push(rbp()));
-        self.asm.insert(
-            0,
-            Instruction::Comment(format!("save the base pointer ('{}')", rbp())),
-        );
+        if self.comments {
+            self.asm.insert(
+                0,
+                Instruction::Comment(format!("save the base pointer ('{}')", rbp())),
+            );
+        }
         self.asm.insert(0, Instruction::Label(self.label));
         self.asm.push(Instruction::Ret);
         GeneratedCode(format!("{}", self))
