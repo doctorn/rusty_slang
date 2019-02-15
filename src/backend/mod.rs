@@ -614,11 +614,11 @@ impl Code {
 
     fn emit_inr(&mut self, sub: Expr, generator: &mut Generator) -> &mut Code {
         self.comment(format!(
-            "compute the value we want to put in the left of the union"
+            "compute the value we want to put in the right of the union"
         ))
         .emit(sub, generator)
         .comment(format!(
-            "the value we want in the left is left in the accumulator ('{}') so we save this",
+            "the value we want in the right is left in the accumulator ('{}') so we save this",
             rax()
         ))
         .push(rax())
