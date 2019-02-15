@@ -175,6 +175,7 @@ enum Instruction {
     Lea(Location, Location),
     Call(Location),
     CallRuntime(&'static str),
+    Comment(String),
     Ret,
 }
 
@@ -202,6 +203,7 @@ impl fmt::Display for Instruction {
             Lea(source, target) => writeln!(f, "\tleaq {},{}", source, target),
             Call(loc) => writeln!(f, "\tcall *{}", loc),
             CallRuntime(name) => writeln!(f, "\tcall {}", name),
+            Comment(ref comment) => writeln!(f, "\t# {}", comment),
             Ret => writeln!(f, "\tret"),
         }
     }
@@ -332,14 +334,47 @@ impl Code {
         self
     }
 
+    pub fn comment(&mut self, comment: String) -> &mut Code {
+        self.asm.push(Instruction::Comment(comment));
+        self
+    }
+
     pub fn ret(&mut self) -> GeneratedCode {
-        self.mov(rbp(), rsp()).pop(rbp());
+        self.comment(format!(
+            "update stack pointer ('{}') to base pointer ('{}')",
+            rsp(),
+            rbp()
+        ))
+        .mov(rbp(), rsp())
+        .comment(format!("drop back into previous stack frame"))
+        .pop(rbp());
         if self.allocated > 0 {
             self.asm
                 .insert(0, Instruction::Sub(constant(self.allocated as i64), rsp()));
+            self.asm.insert(
+                0,
+                Instruction::Comment(format!(
+                    "we need {} bytes for local variables so decrement stack pointer ('{}') by {}",
+                    self.allocated,
+                    rsp(),
+                    self.allocated
+                )),
+            );
         }
         self.asm.insert(0, Instruction::Mov(rsp(), rbp()));
+        self.asm.insert(
+            0,
+            Instruction::Comment(format!(
+                "update base pointer ('{}') to stack pointer ('{}')",
+                rbp(),
+                rsp()
+            )),
+        );
         self.asm.insert(0, Instruction::Push(rbp()));
+        self.asm.insert(
+            0,
+            Instruction::Comment(format!("save the base pointer ('{}')", rbp())),
+        );
         self.asm.insert(0, Instruction::Label(self.label));
         self.asm.push(Instruction::Ret);
         GeneratedCode(format!("{}", self))
@@ -371,9 +406,9 @@ impl Code {
         &self.env
     }
 
-    pub fn get(&self, v: String) -> Location {
+    pub fn get(&self, v: &str) -> Location {
         for (envv, loc, enabled) in self.env.iter().rev() {
-            if &v == envv && *enabled {
+            if v == envv && *enabled {
                 return *loc;
             }
         }

@@ -1,3 +1,5 @@
+(* let x : int = 3 in x / 4 end *)
+
 (*
 let x : int = 3 in
   (let x : int = 4 in x end) + x
@@ -6,6 +8,7 @@ end
 
 (* (fun (x: int) -> x end) 3 *)
 
+(*
 let fib(m : int) : int = 
   if m = 0 then 
     0
@@ -19,6 +22,7 @@ let fib(m : int) : int =
 in
   fib ?
 end
+*)
 
 (*
 let x : int ref = ref 3 in
@@ -29,7 +33,6 @@ let x : int ref = ref 3 in
 end
 *)
 
-(*
 let fib (m : int) : int =
   let i : int ref = ref 0 
   in let a : int ref = ref 0 
@@ -53,7 +56,6 @@ let fib (m : int) : int =
 in
   fib ?
 end
-*)
 
 (*
 let add : int -> int -> int = 
