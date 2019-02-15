@@ -218,6 +218,7 @@ impl fmt::Display for GeneratedCode {
 }
 
 pub struct Code {
+    comments: bool,
     label: Label,
     env: Vec<(String, Location, bool)>,
     allocated: usize,
@@ -225,8 +226,9 @@ pub struct Code {
 }
 
 impl Code {
-    pub fn new(label: Label) -> Code {
+    pub fn new(label: Label, comments: bool) -> Code {
         Code {
+            comments: comments,
             label: label,
             env: vec![],
             allocated: 0,
@@ -419,7 +421,14 @@ impl Code {
 impl fmt::Display for Code {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in self.asm.iter() {
-            write!(f, "{}", line)?;
+            match line {
+                c @ Instruction::Comment(_) => {
+                    if self.comments {
+                        write!(f, "{}", c)?
+                    }
+                }
+                _ => write!(f, "{}", line)?,
+            };
         }
         Ok(())
     }

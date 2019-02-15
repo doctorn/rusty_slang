@@ -7,12 +7,23 @@ use x86::*;
 use std::fmt;
 
 struct Generator {
+    comments: bool,
     functions: Vec<GeneratedCode>,
 }
 
 impl Generator {
     fn new() -> Generator {
-        Generator { functions: vec![] }
+        Generator {
+            comments: false,
+            functions: vec![],
+        }
+    }
+
+    fn new_with_comments() -> Generator {
+        Generator {
+            comments: true,
+            functions: vec![],
+        }
     }
 
     fn add(&mut self, code: GeneratedCode) {
@@ -376,7 +387,7 @@ impl Code {
             .collect::<Vec<_>>();
         let (v, expr) = (lambda.0, *lambda.1);
         let label = Label::new();
-        let mut lambda = Code::new(label);
+        let mut lambda = Code::new(label, generator.comments);
         lambda.comment(format!(
             "the formal parameter of the function will be left in '{}' and a pointer to the closure's environment will be left in '{}'", rdi(), rsi()
         ));
@@ -474,7 +485,7 @@ impl Code {
             .collect::<Vec<_>>();
         let (v, expr) = (lambda.0, *lambda.1);
         let label = Label::new();
-        let mut lambda = Code::new(label);
+        let mut lambda = Code::new(label, generator.comments);
         let vloc = lambda.allocate(v.clone());
         let floc = lambda.allocate(f.clone());
         lambda
@@ -814,10 +825,19 @@ impl Code {
     }
 }
 
-pub fn generate(expr: Expr) -> String {
-    let mut generator = Generator::new();
-    let mut entry = Code::new("entry".into());
+fn generate_using(mut generator: Generator, expr: Expr) -> String {
+    let mut entry = Code::new("entry".into(), generator.comments);
     let entry = entry.emit(expr, &mut generator);
     generator.add(entry.ret());
     format!("{}", generator)
+}
+
+pub fn generate(expr: Expr) -> String {
+    let generator = Generator::new();
+    generate_using(generator, expr)
+}
+
+pub fn generate_with_comments(expr: Expr) -> String {
+    let generator = Generator::new_with_comments();
+    generate_using(generator, expr)
 }

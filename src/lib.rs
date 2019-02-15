@@ -7,7 +7,7 @@ use termion::{color, style};
 mod backend;
 mod frontend;
 
-pub fn compile(input: &str, output: &str) -> Result<(), String> {
+pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> {
     let mut input_file = match OpenOptions::new().read(true).open(input) {
         Ok(file) => file,
         Err(_) => {
@@ -57,7 +57,11 @@ pub fn compile(input: &str, output: &str) -> Result<(), String> {
             ))
         }
     };
-    let code = backend::generate(ast.into());
+    let code = if comments {
+        backend::generate_with_comments(ast.into())
+    } else {
+        backend::generate(ast.into())
+    };
     if let Err(_) = write!(output_file, "{}", code) {
         return Err(format!(
             "{}{}error{}{}: failed to write to '{}{}{}'",

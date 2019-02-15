@@ -6,15 +6,59 @@ use termion::{color, style};
 
 use std::env;
 
+struct Options {
+    comments: bool,
+    help: bool,
+    input: Option<String>,
+    output: Option<String>,
+}
+
+impl Options {
+    fn init() -> Options {
+        let mut comments = false;
+        let mut help = false;
+        let mut input = None;
+        let mut output = None;
+        let args = env::args().collect::<Vec<String>>();
+        for arg in args.into_iter().skip(1) {
+            if arg == "-C" {
+                comments = true;
+            } else if arg == "--help" {
+                help = true;
+            } else if let None = input {
+                input = Some(arg)
+            } else {
+                output = Some(arg)
+            }
+        }
+        Options {
+            comments,
+            help,
+            input,
+            output,
+        }
+    }
+}
+
+fn usage() {
+    println!("usage: slang [options] src dest");
+    println!("options:");
+    println!("  --help   display this information");
+    println!("  -C       add comments to generated assembly");
+}
+
 fn main() {
     println!("( {}slang{} ) ", style::Bold, style::Reset);
-    let args: Vec<String> = env::args().collect();
-    let mut args = args.into_iter().skip(1);
-    let input = match args.next() {
+    let options = Options::init();
+    if options.help {
+        usage();
+        return;
+    }
+    let input = match options.input {
         Some(input) => input,
         None => {
             println!(
-                "{}{}error{}{}: no input file given! (expected two arguments)",
+                "{}{}error{}{}: no input file given! (see '--help' for usage)",
                 style::Bold,
                 color::Fg(color::Red),
                 color::Fg(color::Reset),
@@ -23,11 +67,11 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let output = match args.next() {
+    let output = match options.output {
         Some(input) => input,
         None => {
             println!(
-                "{}{}error{}{}: no output file given! (expected two arguments)",
+                "{}{}error{}{}: no output file given! (see '--help' for usage)",
                 style::Bold,
                 color::Fg(color::Red),
                 color::Fg(color::Reset),
@@ -49,8 +93,17 @@ fn main() {
         output,
         style::Reset
     );
+    if options.comments {
+        println!(
+            "{}{}note{}{}: including comments in assembly",
+            style::Bold,
+            color::Fg(color::Magenta),
+            color::Fg(color::Reset),
+            style::Reset,
+        );
+    }
     let now = Instant::now();
-    match slang::compile(&input, &output) {
+    match slang::compile(&input, &output, options.comments) {
         Ok(_) => {
             println!(
                 "{}{}success{}{}: compilation completed in {}{}ms{}",
