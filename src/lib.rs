@@ -2,12 +2,13 @@ extern crate termion;
 
 use std::fs::OpenOptions;
 use std::io::prelude::*;
+use std::path::Path;
 use termion::{color, style};
 
 mod backend;
 mod frontend;
 
-pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> {
+pub fn compile(input: &Path, output: &Path, comments: bool) -> Result<(), String> {
     let mut input_file = match OpenOptions::new().read(true).open(input) {
         Ok(file) => file,
         Err(_) => {
@@ -18,7 +19,7 @@ pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> 
                 color::Fg(color::Reset),
                 style::Reset,
                 style::Bold,
-                input,
+                input.display(),
                 style::Reset
             ))
         }
@@ -32,11 +33,11 @@ pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> 
             color::Fg(color::Reset),
             style::Reset,
             style::Bold,
-            input,
+            input.display(),
             style::Reset
         ));
     }
-    let ast = frontend::frontend(input, text)?;
+    let ast = frontend::frontend(&format!("{}", input.display()), text)?;
     let mut output_file = match OpenOptions::new()
         .create(true)
         .write(true)
@@ -52,7 +53,7 @@ pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> 
                 color::Fg(color::Reset),
                 style::Reset,
                 style::Bold,
-                output,
+                output.display(),
                 style::Reset
             ))
         }
@@ -70,7 +71,7 @@ pub fn compile(input: &str, output: &str, comments: bool) -> Result<(), String> 
             color::Fg(color::Reset),
             style::Reset,
             style::Bold,
-            output,
+            output.display(),
             style::Reset
         ));
     }
