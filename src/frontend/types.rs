@@ -65,7 +65,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                         TypeExpr::Int,
                         t
                     ),
-                    expr,
+                    sub.borrow_raw(),
                 )),
                 (Not, t) => Err(log::type_error(
                     loc,
@@ -75,7 +75,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                         TypeExpr::Bool,
                         t,
                     ),
-                    expr,
+                    sub.borrow_raw(),
                 )),
             }
         }
@@ -144,7 +144,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                         TypeExpr::Bool,
                         t1
                     ),
-                    expr,
+                    condition.borrow_raw(),
                 ))
             }
         }
@@ -160,7 +160,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 Err(log::type_error(
                     loc,
                     format!("can only project from a product type, found '{}'", t),
-                    expr,
+                    sub.borrow_raw(),
                 ))
             }
         }
@@ -172,7 +172,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 Err(log::type_error(
                     loc,
                     format!("can only project from a product type, found '{}'", t),
-                    expr,
+                    sub.borrow_raw(),
                 ))
             }
         }
@@ -220,7 +220,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 Err(log::type_error(
                     loc,
                     format!("case expected a union type, found '{}'", t),
-                    expr,
+                    sub.borrow_raw(),
                 ))
             }
         }
@@ -246,7 +246,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                         TypeExpr::Bool,
                         t
                     ),
-                    expr,
+                    condition.borrow_raw(),
                 ))
             }
         }
@@ -273,24 +273,24 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 Err(log::type_error(
                     loc,
                     format!("cannot dereference something of type '{}'", t),
-                    expr,
+                    sub.borrow_raw(),
                 ))
             }
         }
         Assign(left, right) => {
-            let t = infer(env, left)?;
-            if let TypeExpr::Ref(t) = t {
-                let right = infer(env, right)?;
-                if *t == right {
+            let t1 = infer(env, left)?;
+            if let TypeExpr::Ref(t1) = t1 {
+                let t2 = infer(env, right)?;
+                if *t1 == t2 {
                     Ok(TypeExpr::Unit)
                 } else {
                     Err(log::type_error(
                         loc,
                         format!(
                         "right hand side of assignment was expected to be of type '{}', found '{}'",
-                        t, right
+                        t1, t2
                     ),
-                        expr,
+                        right.borrow_raw(),
                     ))
                 }
             } else {
@@ -298,9 +298,9 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                     loc,
                     format!(
                         "left hand side of assignment must be a reference type, found '{}'",
-                        t
+                        t1
                     ),
-                    expr,
+                    left.borrow_raw(),
                 ))
             }
         }
@@ -317,14 +317,14 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                             "function was expecting argument of type '{}', found '{}'",
                             from, t
                         ),
-                        expr,
+                        right.borrow_raw(),
                     ))
                 }
             } else {
                 Err(log::type_error(
                     loc,
                     format!("expected a function type, found '{}'", t),
-                    expr,
+                    left.borrow_raw(),
                 ))
             }
         }
@@ -339,7 +339,7 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 Err(log::type_error(
                     loc,
                     format!("expected expression of type '{}', found '{}'", type_expr, t),
-                    expr,
+                    sub.borrow_raw(),
                 ))
             }
         }
@@ -359,7 +359,14 @@ pub fn infer(env: &mut Vec<(Var, TypeExpr)>, expr: &Locatable<Expr>) -> Result<T
                 env.pop();
                 Ok(body)
             } else {
-                Err("Type mismatch".to_string())
+                Err(log::type_error(
+                    loc,
+                    format!(
+                        "expected expression of type '{}', found '{}'",
+                        type_expr, lambda
+                    ),
+                    sub_lambda.borrow_raw(),
+                ))
             }
         }
     }
