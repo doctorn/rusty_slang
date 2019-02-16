@@ -65,7 +65,7 @@ impl Options {
 }
 
 fn usage() {
-    println!("usage: slang [options] src dest");
+    println!("usage: slang [options] file");
     println!("options:");
     println!("  --help        display this information");
     println!("  -C            add comments to generated code");
