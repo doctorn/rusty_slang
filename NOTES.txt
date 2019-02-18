@@ -69,7 +69,7 @@ expression language code generation
 
 
 
-3.    -
+2.    -
       |
       e
 
@@ -79,7 +79,7 @@ expression language code generation
 
 
 
-2.    +
+3.    +
      / \
    e1   e2
 
@@ -103,7 +103,7 @@ expression language code generation
 
 
 
-3.     if
+4.     if
      /  |  \
    e1  e2  e3
 
