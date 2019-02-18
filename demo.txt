@@ -1,0 +1,160 @@
+
+[ expr.slang ]
+
+      | slang code
+      V
+
+    lexer
+
+      | tokens
+      V
+
+    parser
+
+      | decorated ast
+      V                                _
+                         [ crt0.c ]     \
+ type checker                           |
+                             |          |
+      | simplified ast       V          |
+      |________                         |
+               |         c-compiler     |
+ (non-existent |         (gcc again)    |
+  optimiser)   |                        |
+       ________|             |          |
+      |                      V          |
+      V                                 \     while
+                         [ crt0.o ]      > building the
+  generator                             /    compiler
+                             |          |
+      | x86_64 assembly      V          |
+      V                                 |
+                          archiver      |
+  [ expr.s ]                (ar)        |
+                                        |
+      |                      |          |
+      V                      V          |
+                                        |
+   assembler          [ libslangrt.a ] _/
+    (gcc)
+                             |
+      |_________   __________|
+                | |
+                V V
+
+               linker 
+           (gcc yet again)
+
+                 | 
+                 V
+
+             [ expr* ]
+
+
+
+
+
+
+
+
+
+
+
+
+expression language code generation
+
+1. constant
+
+   movq $constant,%rax
+
+
+
+3.    -
+      |
+      e
+
+   # emit code for e
+
+   negq %rax
+
+
+
+2.    +
+     / \
+   e1   e2
+
+   # emit code for e1
+
+   pushq %rax
+
+   # emit code for e2 
+
+   movq %rax,%rbx
+   popq %rax
+
+   addq %rbx,%rax
+
+
+
+(
+   cqto
+   idivq %rbx
+)
+
+
+
+3.     if
+     /  |  \
+   e1  e2  e3
+
+   # emit code for e1
+
+   cmp $0,%rax
+   je .L0
+
+   # emit code for e2
+
+   jmp .L1
+
+ .L0:
+
+   #emit code for e3
+
+ .L1:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+implementing closures
+
+            stack         heap          code
+
+                        |  ...  |     |  ...  |
+%rsp ----> _______      |_______|     |       |
+          |closure|---->| code  |--.  |       |
+          |       |  .--| env   |  |  |       |
+%rbp ---->|_______|  |  |-------|  |  |       |
+          |       |  |  |  ...  |  `->|-------|
+          |       |  |  |_______|     |       |
+          |       |  `->| x     |     |       |
+          |_______|     | y     |     |       |<---- %rip
+          |       |     | z     |     |       |
+          |  ...  |     |  ...  |     |  ...  |
+
+
+
+
+
+
+
+
